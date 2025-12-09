@@ -1,0 +1,576 @@
+{
+  "info": {
+    "name": "Django Workspace Management API",
+    "description": "Complete API collection for authentication and workspace management",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8000/api",
+      "type": "string"
+    },
+    {
+      "key": "access_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "refresh_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "workspace_id",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Authentication",
+      "item": [
+        {
+          "name": "Register",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"user@example.com\",\n  \"password\": \"SecurePass123!\",\n  \"password2\": \"SecurePass123!\",\n  \"username\": \"johndoe\",\n  \"role\": \"CUSTOMER\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/register/",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "register", ""]
+            }
+          }
+        },
+        {
+          "name": "Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "pm.collectionVariables.set(\"access_token\", jsonData.access);",
+                  "pm.collectionVariables.set(\"refresh_token\", jsonData.refresh);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"user@example.com\",\n  \"password\": \"SecurePass123!\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/login/",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "login", ""]
+            }
+          }
+        },
+        {
+          "name": "Get Current User",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/auth/me/",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "me", ""]
+            }
+          }
+        },
+        {
+          "name": "Refresh Token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "pm.collectionVariables.set(\"access_token\", jsonData.access);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refresh\": \"{{refresh_token}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/token/refresh/",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "token", "refresh", ""]
+            }
+          }
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refresh\": \"{{refresh_token}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/logout/",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "logout", ""]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Workspaces",
+      "item": [
+        {
+          "name": "Create Workspace",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "pm.collectionVariables.set(\"workspace_id\", jsonData.workspace_id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Downtown Facility Project\",\n  \"workspace_type\": \"PROJECT\",\n  \"description\": \"Main facility management project\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/workspaces/",
+              "host": ["{{base_url}}"],
+              "path": ["workspaces", ""]
+            }
+          }
+        },
+        {
+          "name": "List Workspaces",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/workspaces/",
+              "host": ["{{base_url}}"],
+              "path": ["workspaces", ""]
+            }
+          }
+        },
+        {
+          "name": "Get Workspace Stats",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/workspaces/{{workspace_id}}/stats/",
+              "host": ["{{base_url}}"],
+              "path": ["workspaces", "{{workspace_id}}", "stats", ""]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Jobs",
+      "item": [
+        {
+          "name": "Create Job",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"HVAC Maintenance\",\n  \"description\": \"Quarterly HVAC system maintenance\",\n  \"status\": \"PENDING\",\n  \"priority\": \"HIGH\",\n  \"estimated_hours\": 8,\n  \"due_date\": \"2025-12-15\",\n  \"location\": \"Building A, Floor 3\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/workspaces/{{workspace_id}}/jobs/",
+              "host": ["{{base_url}}"],
+              "path": ["workspaces", "{{workspace_id}}", "jobs", ""]
+            }
+          }
+        },
+        {
+          "name": "List Jobs",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/workspaces/{{workspace_id}}/jobs/",
+              "host": ["{{base_url}}"],
+              "path": ["workspaces", "{{workspace_id}}", "jobs", ""]
+            }
+          }
+        },
+        {
+          "name": "Export Jobs CSV",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/workspaces/{{workspace_id}}/jobs/export/",
+              "host": ["{{base_url}}"],
+              "path": ["workspaces", "{{workspace_id}}", "jobs", "export", ""]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Estimates",
+      "item": [
+        {
+          "name": "Create Estimate",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"HVAC Maintenance Estimate\",\n  \"description\": \"Cost estimate for quarterly maintenance\",\n  \"status\": \"DRAFT\",\n  \"subtotal\": 1000.00,\n  \"tax_amount\": 80.00,\n  \"discount_amount\": 50.00,\n  \"total_amount\": 1030.00,\n  \"valid_until\": \"2025-12-31\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/workspaces/{{workspace_id}}/estimates/",
+              "host": ["{{base_url}}"],
+              "path": ["workspaces", "{{workspace_id}}", "estimates", ""]
+            }
+          }
+        },
+        {
+          "name": "List Estimates",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/workspaces/{{workspace_id}}/estimates/",
+              "host": ["{{base_url}}"],
+              "path": ["workspaces", "{{workspace_id}}", "estimates", ""]
+            }
+          }
+        },
+        {
+          "name": "Export Estimates CSV",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/workspaces/{{workspace_id}}/estimates/export/",
+              "host": ["{{base_url}}"],
+              "path": ["workspaces", "{{workspace_id}}", "estimates", "export", ""]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Contractors",
+      "item": [
+        {
+          "name": "Add Contractor",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"user\": 2,\n  \"company_name\": \"ABC Contractors Inc.\",\n  \"license_number\": \"LIC-12345\",\n  \"specialization\": \"HVAC Systems\",\n  \"hourly_rate\": 75.00,\n  \"status\": \"ACTIVE\",\n  \"phone\": \"+1-555-0123\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/workspaces/{{workspace_id}}/contractors/",
+              "host": ["{{base_url}}"],
+              "path": ["workspaces", "{{workspace_id}}", "contractors", ""]
+            }
+          }
+        },
+        {
+          "name": "List Contractors",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/workspaces/{{workspace_id}}/contractors/",
+              "host": ["{{base_url}}"],
+              "path": ["workspaces", "{{workspace_id}}", "contractors", ""]
+            }
+          }
+        },
+        {
+          "name": "Export Contractors CSV",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/workspaces/{{workspace_id}}/contractors/export/",
+              "host": ["{{base_url}}"],
+              "path": ["workspaces", "{{workspace_id}}", "contractors", "export", ""]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Payouts",
+      "item": [
+        {
+          "name": "Create Payout",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"contractor\": 1,\n  \"amount\": 600.00,\n  \"status\": \"PENDING\",\n  \"payment_method\": \"BANK_TRANSFER\",\n  \"description\": \"Payment for HVAC maintenance job\",\n  \"scheduled_date\": \"2025-12-20\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/workspaces/{{workspace_id}}/payouts/",
+              "host": ["{{base_url}}"],
+              "path": ["workspaces", "{{workspace_id}}", "payouts", ""]
+            }
+          }
+        },
+        {
+          "name": "List Payouts",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/workspaces/{{workspace_id}}/payouts/",
+              "host": ["{{base_url}}"],
+              "path": ["workspaces", "{{workspace_id}}", "payouts", ""]
+            }
+          }
+        },
+        {
+          "name": "Export Payouts CSV",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/workspaces/{{workspace_id}}/payouts/export/",
+              "host": ["{{base_url}}"],
+              "path": ["workspaces", "{{workspace_id}}", "payouts", "export", ""]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Compliance",
+      "item": [
+        {
+          "name": "Add Compliance Record",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"contractor\": 1,\n  \"compliance_type\": \"LICENSE\",\n  \"document_name\": \"Contractor License\",\n  \"document_number\": \"LIC-12345\",\n  \"status\": \"VALID\",\n  \"issue_date\": \"2024-01-01\",\n  \"expiry_date\": \"2026-01-01\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/workspaces/{{workspace_id}}/compliance/",
+              "host": ["{{base_url}}"],
+              "path": ["workspaces", "{{workspace_id}}", "compliance", ""]
+            }
+          }
+        },
+        {
+          "name": "List Compliance",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/workspaces/{{workspace_id}}/compliance/",
+              "host": ["{{base_url}}"],
+              "path": ["workspaces", "{{workspace_id}}", "compliance", ""]
+            }
+          }
+        },
+        {
+          "name": "Get Expiring Compliance",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/workspaces/{{workspace_id}}/compliance/expiring/",
+              "host": ["{{base_url}}"],
+              "path": ["workspaces", "{{workspace_id}}", "compliance", "expiring", ""]
+            }
+          }
+        },
+        {
+          "name": "Export Compliance CSV",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/workspaces/{{workspace_id}}/compliance/export/",
+              "host": ["{{base_url}}"],
+              "path": ["workspaces", "{{workspace_id}}", "compliance", "export", ""]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

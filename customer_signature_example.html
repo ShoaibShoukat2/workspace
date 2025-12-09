@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sign Estimate - Customer Portal</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            font-size: 28px;
+            margin-bottom: 10px;
+        }
+        
+        .content {
+            padding: 30px;
+        }
+        
+        .estimate-info {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 30px;
+        }
+        
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 0;
+            border-bottom: 1px solid #dee2e6;
+        }
+        
+        .info-row:last-child {
+            border-bottom: none;
+        }
+        
+        .info-label {
+            font-weight: 600;
+            color: #495057;
+        }
+        
+        .info-value {
+            color: #212529;
+        }
+        
+        .line-items {
+            margin: 30px 0;
+        }
+        
+        .line-items h3 {
+            margin-bottom: 15px;
+            color: #495057;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+        }
+        
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #dee2e6;
+        }
+        
+        th {
+            background: #f8f9fa;
+            font-weight: 600;
+            color: #495057;
+        }
+        
+        .text-right {
+            text-align: right;
+        }
+        
+        .totals {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+        
+        .total-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+        }
+        
+        .total-row.grand-total {
+            font-size: 20px;
+            font-weight: bold;
+            color: #667eea;
+            border-top: 2px solid #667eea;
+            padding-top: 15px;
+            margin-top: 10px;
+        }
+        
+        .signature-section {
+            margin: 30px 0;
+            padding: 20px;
+            border: 2px dashed #dee2e6;
+            border-radius: 8px;
+        }
+        
+        .signature-section h3 {
+            margin-bottom: 15px;
+            color: #495057;
+        }
+        
+        #signature-pad {
+            border: 2px solid #dee2e6;
+            border-radius: 8px;
+            cursor: crosshair;
+            display: block;
+            margin: 0 auto;
+        }
+        
+        .signature-buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+            justify-content: center;
+        }
+        
+        button {
+            padding: 12px 30px;
+            border: none;
+            border-radius: 6px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+        
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+        
+        .btn-secondary:hover {
+            background: #5a6268;
+        }
+        
+        .success-message {
+            background: #d4edda;
+            color: #155724;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+            display: none;
+        }
+        
+        .error-message {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+            display: none;
+        }
+        
+        .signed-badge {
+            display: inline-block;
+            background: #28a745;
+            color: white;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📋 Estimate Review & Signature</h1>
+            <p>Please review the estimate details and sign below to approve</p>
+        </div>
+        
+        <div class="content">
+            <div class="estimate-info">
+                <div class="info-row">
+                    <span class="info-label">Estimate Number:</span>
+                    <span class="info-value" id="estimate-number">EST-A1B2C3D4-00001</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Title:</span>
+                    <span class="info-value" id="estimate-title">HVAC System Repair</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Status:</span>
+                    <span class="info-value" id="estimate-status">SENT</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Valid Until:</span>
+                    <span class="info-value" id="valid-until">2025-12-31</span>
+                </div>
+            </div>
+            
+            <div class="line-items">
+                <h3>Line Items</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Description</th>
+                            <th class="text-right">Quantity</th>
+                            <th class="text-right">Unit Price</th>
+                            <th class="text-right">Total</th>
+                        </tr>
+                    </thead>
+                    <tbody id="line-items-body">
+                        <tr>
+                            <td>HVAC System Inspection</td>
+                            <td class="text-right">1</td>
+                            <td class="text-right">$200.00</td>
+                            <td class="text-right">$200.00</td>
+                        </tr>
+                        <tr>
+                            <td>Compressor Replacement</td>
+                            <td class="text-right">1</td>
+                            <td class="text-right">$800.00</td>
+                            <td class="text-right">$800.00</td>
+                        </tr>
+                        <tr>
+                            <td>Labor (8 hours)</td>
+                            <td class="text-right">8</td>
+                            <td class="text-right">$75.00</td>
+                            <td class="text-right">$600.00</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            
+            <div class="totals">
+                <div class="total-row">
+                    <span>Subtotal:</span>
+                    <span id="subtotal">$1,600.00</span>
+                </div>
+                <div class="total-row">
+                    <span>Tax (8.5%):</span>
+                    <span id="tax">$136.00</span>
+                </div>
+                <div class="total-row">
+                    <span>Discount:</span>
+                    <span id="discount">-$50.00</span>
+                </div>
+                <div class="total-row grand-total">
+                    <span>Total Amount:</span>
+                    <span id="total">$1,686.00</span>
+                </div>
+            </div>
+            
+            <div class="success-message" id="success-message">
+                ✅ Estimate signed successfully! Thank you for your approval.
+            </div>
+            
+            <div class="error-message" id="error-message">
+                ❌ <span id="error-text"></span>
+            </div>
+            
+            <div class="signature-section" id="signature-section">
+                <h3>Digital Signature</h3>
+                <p style="margin-bottom: 15px; color: #6c757d;">
+                    Please sign in the box below using your mouse or touch screen
+                </p>
+                <canvas id="signature-pad" width="800" height="200"></canvas>
+                <div class="signature-buttons">
+                    <button class="btn-secondary" onclick="clearSignature()">Clear</button>
+                    <button class="btn-primary" onclick="submitSignature()">Sign & Approve</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // Signature Pad Implementation
+        const canvas = document.getElementById('signature-pad');
+        const ctx = canvas.getContext('2d');
+        let isDrawing = false;
+        let lastX = 0;
+        let lastY = 0;
+        
+        // Set canvas background
+        ctx.fillStyle = 'white';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        canvas.addEventListener('mousedown', startDrawing);
+        canvas.addEventListener('mousemove', draw);
+        canvas.addEventListener('mouseup', stopDrawing);
+        canvas.addEventListener('mouseout', stopDrawing);
+        
+        // Touch events for mobile
+        canvas.addEventListener('touchstart', handleTouchStart);
+        canvas.addEventListener('touchmove', handleTouchMove);
+        canvas.addEventListener('touchend', stopDrawing);
+        
+        function startDrawing(e) {
+            isDrawing = true;
+            [lastX, lastY] = [e.offsetX, e.offsetY];
+        }
+        
+        function draw(e) {
+            if (!isDrawing) return;
+            
+            ctx.strokeStyle = '#000';
+            ctx.lineWidth = 2;
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            
+            ctx.beginPath();
+            ctx.moveTo(lastX, lastY);
+            ctx.lineTo(e.offsetX, e.offsetY);
+            ctx.stroke();
+            
+            [lastX, lastY] = [e.offsetX, e.offsetY];
+        }
+        
+        function stopDrawing() {
+            isDrawing = false;
+        }
+        
+        function handleTouchStart(e) {
+            e.preventDefault();
+            const touch = e.touches[0];
+            const rect = canvas.getBoundingClientRect();
+            isDrawing = true;
+            lastX = touch.clientX - rect.left;
+            lastY = touch.clientY - rect.top;
+        }
+        
+        function handleTouchMove(e) {
+            if (!isDrawing) return;
+            e.preventDefault();
+            
+            const touch = e.touches[0];
+            const rect = canvas.getBoundingClientRect();
+            const x = touch.clientX - rect.left;
+            const y = touch.clientY - rect.top;
+            
+            ctx.strokeStyle = '#000';
+            ctx.lineWidth = 2;
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            
+            ctx.beginPath();
+            ctx.moveTo(lastX, lastY);
+            ctx.lineTo(x, y);
+            ctx.stroke();
+            
+            lastX = x;
+            lastY = y;
+        }
+        
+        function clearSignature() {
+            ctx.fillStyle = 'white';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
+        
+        function isCanvasBlank() {
+            const blank = document.createElement('canvas');
+            blank.width = canvas.width;
+            blank.height = canvas.height;
+            const blankCtx = blank.getContext('2d');
+            blankCtx.fillStyle = 'white';
+            blankCtx.fillRect(0, 0, blank.width, blank.height);
+            
+            return canvas.toDataURL() === blank.toDataURL();
+        }
+        
+        async function submitSignature() {
+            if (isCanvasBlank()) {
+                showError('Please provide your signature before submitting');
+                return;
+            }
+            
+            const signatureData = canvas.toDataURL('image/png');
+            const estimateId = 1; // Get from URL parameter
+            
+            try {
+                const response = await fetch(`/api/workspaces/public/estimates/${estimateId}/sign/`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        signature: signatureData
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    showSuccess();
+                    document.getElementById('signature-section').style.display = 'none';
+                } else {
+                    showError(data.error || 'Failed to submit signature');
+                }
+            } catch (error) {
+                showError('Network error. Please try again.');
+            }
+        }
+        
+        function showSuccess() {
+            document.getElementById('success-message').style.display = 'block';
+            document.getElementById('error-message').style.display = 'none';
+        }
+        
+        function showError(message) {
+            document.getElementById('error-text').textContent = message;
+            document.getElementById('error-message').style.display = 'block';
+            document.getElementById('success-message').style.display = 'none';
+        }
+        
+        // Load estimate data from API
+        async function loadEstimateData() {
+            const estimateNumber = 'EST-A1B2C3D4-00001'; // Get from URL parameter
+            
+            try {
+                const response = await fetch(`/api/workspaces/public/estimates/${estimateNumber}/`);
+                const data = await response.json();
+                
+                // Populate estimate data
+                document.getElementById('estimate-number').textContent = data.estimate_number;
+                document.getElementById('estimate-title').textContent = data.title;
+                document.getElementById('estimate-status').textContent = data.status;
+                document.getElementById('valid-until').textContent = data.valid_until;
+                
+                // Populate line items
+                const tbody = document.getElementById('line-items-body');
+                tbody.innerHTML = '';
+                data.line_items.forEach(item => {
+                    const row = `
+                        <tr>
+                            <td>${item.description}</td>
+                            <td class="text-right">${item.quantity}</td>
+                            <td class="text-right">$${parseFloat(item.unit_price).toFixed(2)}</td>
+                            <td class="text-right">$${parseFloat(item.total).toFixed(2)}</td>
+                        </tr>
+                    `;
+                    tbody.innerHTML += row;
+                });
+                
+                // Populate totals
+                document.getElementById('subtotal').textContent = `$${parseFloat(data.subtotal).toFixed(2)}`;
+                document.getElementById('tax').textContent = `$${parseFloat(data.tax_amount).toFixed(2)}`;
+                document.getElementById('discount').textContent = `-$${parseFloat(data.discount_amount).toFixed(2)}`;
+                document.getElementById('total').textContent = `$${parseFloat(data.total_amount).toFixed(2)}`;
+                
+                // Check if already signed
+                if (data.is_signed) {
+                    document.getElementById('signature-section').innerHTML = `
+                        <h3>Digital Signature <span class="signed-badge">✓ SIGNED</span></h3>
+                        <p style="color: #28a745; font-weight: 600;">This estimate has been signed and approved.</p>
+                    `;
+                }
+            } catch (error) {
+                showError('Failed to load estimate data');
+            }
+        }
+        
+        // Load data on page load
+        // loadEstimateData();
+    </script>
+</body>
+</html>

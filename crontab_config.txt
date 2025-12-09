@@ -1,0 +1,83 @@
+# Cron Automation System Configuration
+# Add these entries to your crontab (crontab -e)
+
+# Daily Compliance Expiry Check - Runs at 6:00 AM every day
+0 6 * * * cd /path/to/project && python manage.py check_compliance_expiry >> /var/log/cron_compliance.log 2>&1
+
+# Pending Jobs Reminder - Runs at 8:00 AM every weekday (Mon-Fri)
+0 8 * * 1-5 cd /path/to/project && python manage.py send_pending_jobs_reminder >> /var/log/cron_reminders.log 2>&1
+
+# Daily Summary Email - Runs at 9:00 AM every weekday (Mon-Fri)
+0 9 * * 1-5 cd /path/to/project && python manage.py send_daily_summary >> /var/log/cron_summary.log 2>&1
+
+# Payout Reminders - Runs at 10:00 AM every Monday and Thursday
+0 10 * * 1,4 cd /path/to/project && python manage.py send_payout_reminders >> /var/log/cron_payouts.log 2>&1
+
+# Auto Close Stale Jobs - Runs at 2:00 AM every Sunday
+0 2 * * 0 cd /path/to/project && python manage.py auto_close_stale_jobs --days=90 >> /var/log/cron_stale_jobs.log 2>&1
+
+# ============================================================
+# WINDOWS TASK SCHEDULER COMMANDS (Alternative to cron)
+# ============================================================
+
+# For Windows, use Task Scheduler with these commands:
+
+# Daily Compliance Check (6:00 AM daily)
+# Command: python
+# Arguments: manage.py check_compliance_expiry
+# Start in: C:\path\to\project
+
+# Pending Jobs Reminder (8:00 AM weekdays)
+# Command: python
+# Arguments: manage.py send_pending_jobs_reminder
+# Start in: C:\path\to\project
+
+# Daily Summary (9:00 AM weekdays)
+# Command: python
+# Arguments: manage.py send_daily_summary
+# Start in: C:\path\to\project
+
+# Payout Reminders (10:00 AM Mon & Thu)
+# Command: python
+# Arguments: manage.py send_payout_reminders
+# Start in: C:\path\to\project
+
+# Auto Close Stale Jobs (2:00 AM Sunday)
+# Command: python
+# Arguments: manage.py auto_close_stale_jobs --days=90
+# Start in: C:\path\to\project
+
+# ============================================================
+# MANUAL TESTING COMMANDS
+# ============================================================
+
+# Test compliance check:
+# python manage.py check_compliance_expiry
+
+# Test pending jobs reminder:
+# python manage.py send_pending_jobs_reminder
+
+# Test daily summary:
+# python manage.py send_daily_summary
+
+# Test payout reminders:
+# python manage.py send_payout_reminders
+
+# Test auto close (dry run):
+# python manage.py auto_close_stale_jobs --dry-run
+
+# Test auto close (actual):
+# python manage.py auto_close_stale_jobs --days=90
+
+# ============================================================
+# NOTES
+# ============================================================
+
+# 1. Replace /path/to/project with your actual project path
+# 2. Ensure Python virtual environment is activated if using one
+# 3. Log files will be created in /var/log/ (create directory if needed)
+# 4. For Windows, use Task Scheduler GUI or schtasks command
+# 5. Ensure DEFAULT_FROM_EMAIL is configured in settings.py
+# 6. Test each command manually before scheduling
+# 7. Monitor log files for errors
+# 8. Adjust timing based on your timezone and requirements
