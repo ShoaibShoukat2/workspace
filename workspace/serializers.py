@@ -6,7 +6,11 @@ from .models import (
     Report, ComplianceData, JobAssignment, JobChecklist,
     ChecklistStep, StepMedia, JobCompletion, JobNotification,
     ContractorWallet, WalletTransaction, PayoutRequest, JobPayoutEligibility,
-    Dispute, DisputeMessage, DisputeAttachment
+    Dispute, DisputeMessage, DisputeAttachment,
+    # New models
+    CustomerProfile, ContractorLocation, JobTracking, CustomerNotification,
+    MaterialDelivery, InvestorProfile, PropertyInvestment, InvestorPayout,
+    SupportTicket, SupportMessage
 )
 
 User = get_user_model()
@@ -468,3 +472,176 @@ class JobPayoutEligibilitySerializer(serializers.ModelSerializer):
             'created_at', 'updated_at'
         ]
         read_only_fields = ['verified_at', 'payout']
+
+
+# ==================== Customer Dashboard Serializers ====================
+
+class CustomerProfileSerializer(serializers.ModelSerializer):
+    user_email = serializers.EmailField(source='user.email', read_only=True)
+    workspace_name = serializers.CharField(source='workspace.name', read_only=True)
+    
+    class Meta:
+        model = CustomerProfile
+        fields = [
+            'id', 'user', 'user_email', 'workspace', 'workspace_name',
+            'company_name', 'address', 'phone', 'emergency_contact',
+            'emergency_phone', 'preferred_contact_method', 'notification_preferences',
+            'created_at', 'updated_at'
+        ]
+        read_only_fields = ['user', 'workspace']
+
+
+class ContractorLocationSerializer(serializers.ModelSerializer):
+    contractor_email = serializers.EmailField(source='contractor.user.email', read_only=True)
+    job_number = serializers.CharField(source='job.job_number', read_only=True)
+    coordinates = serializers.ReadOnlyField()
+    
+    class Meta:
+        model = ContractorLocation
+        fields = [
+            'id', 'contractor', 'contractor_email', 'job', 'job_number',
+            'latitude', 'longitude', 'coordinates', 'accuracy', 'speed',
+            'heading', 'altitude', 'is_active', 'timestamp'
+        ]
+        read_only_fields = ['contractor', 'timestamp']
+
+
+class JobTrackingSerializer(serializers.ModelSerializer):
+    job_number = serializers.CharField(source='job.job_number', read_only=True)
+    job_title = serializers.CharField(source='job.title', read_only=True)
+    
+    class Meta:
+        model = JobTracking
+        fields = [
+            'id', 'job', 'job_number', 'job_title', 'status',
+            'estimated_arrival', 'actual_arrival', 'started_at',
+            'completed_at', 'delay_reason', 'customer_notified',
+            'last_location_update', 'created_at', 'updated_at'
+        ]
+        read_only_fields = ['job', 'actual_arrival', 'started_at', 'completed_at']
+
+
+class CustomerNotificationSerializer(serializers.ModelSerializer):
+    customer_email = serializers.EmailField(source='customer.user.email', read_only=True)
+    job_number = serializers.CharField(source='job.job_number', read_only=True)
+    
+    class Meta:
+        model = CustomerNotification
+        fields = [
+            'id', 'customer', 'customer_email', 'job', 'job_number',
+            'notification_type', 'title', 'message', 'sent_via',
+            'is_read', 'sent_at', 'read_at'
+        ]
+        read_only_fields = ['customer', 'sent_at', 'read_at']
+
+
+class MaterialDeliverySerializer(serializers.ModelSerializer):
+    job_number = serializers.CharField(source='job.job_number', read_only=True)
+    job_title = serializers.CharField(source='job.title', read_only=True)
+    
+    class Meta:
+        model = MaterialDelivery
+        fields = [
+            'id', 'job', 'job_number', 'job_title', 'item_name',
+            'quantity', 'supplier', 'tracking_number', 'status',
+            'ordered_date', 'expected_delivery', 'actual_delivery',
+            'delivery_photo', 'delivery_notes', 'received_by',
+            'created_at', 'updated_at'
+        ]
+        read_only_fields = ['ordered_date']
+
+
+# ==================== Enhanced Investor Serializers ====================
+
+class InvestorProfileSerializer(serializers.ModelSerializer):
+    user_email = serializers.EmailField(source='user.email', read_only=True)
+    workspace_name = serializers.CharField(source='workspace.name', read_only=True)
+    
+    class Meta:
+        model = InvestorProfile
+        fields = [
+            'id', 'user', 'user_email', 'workspace', 'workspace_name',
+            'investment_amount', 'profit_share_percentage', 'total_earnings',
+            'total_payouts_received', 'roi_percentage', 'investment_date',
+            'is_active', 'created_at', 'updated_at'
+        ]
+        read_only_fields = ['user', 'workspace', 'total_earnings', 'total_payouts_received', 'roi_percentage']
+
+
+class PropertyInvestmentSerializer(serializers.ModelSerializer):
+    investor_email = serializers.EmailField(source='investor.user.email', read_only=True)
+    
+    class Meta:
+        model = PropertyInvestment
+        fields = [
+            'id', 'investor', 'investor_email', 'property_name',
+            'property_address', 'investment_amount', 'total_revenue',
+            'total_profit', 'active_jobs_count', 'completed_jobs_count',
+            'issues_flagged', 'created_at', 'updated_at'
+        ]
+        read_only_fields = ['total_revenue', 'total_profit', 'active_jobs_count', 'completed_jobs_count', 'issues_flagged']
+
+
+class InvestorPayoutSerializer(serializers.ModelSerializer):
+    investor_email = serializers.EmailField(source='investor.user.email', read_only=True)
+    job_number = serializers.CharField(source='job.job_number', read_only=True)
+    property_name = serializers.CharField(source='property_investment.property_name', read_only=True)
+    processed_by_email = serializers.EmailField(source='processed_by.email', read_only=True)
+    
+    class Meta:
+        model = InvestorPayout
+        fields = [
+            'id', 'investor', 'investor_email', 'job', 'job_number',
+            'property_investment', 'property_name', 'payout_number',
+            'amount', 'apex_earnings', 'investor_earnings', 'profit_split_percentage',
+            'status', 'payout_date', 'processed_by', 'processed_by_email',
+            'notes', 'created_at', 'updated_at'
+        ]
+        read_only_fields = ['payout_number', 'processed_by']
+
+
+# ==================== Support System Serializers ====================
+
+class SupportMessageSerializer(serializers.ModelSerializer):
+    sender_email = serializers.EmailField(source='sender.email', read_only=True)
+    sender_name = serializers.CharField(source='sender.get_full_name', read_only=True)
+    
+    class Meta:
+        model = SupportMessage
+        fields = [
+            'id', 'ticket', 'sender', 'sender_email', 'sender_name',
+            'message', 'is_internal', 'attachments', 'created_at'
+        ]
+        read_only_fields = ['sender']
+
+
+class SupportTicketSerializer(serializers.ModelSerializer):
+    user_email = serializers.EmailField(source='user.email', read_only=True)
+    workspace_name = serializers.CharField(source='workspace.name', read_only=True)
+    assigned_to_email = serializers.EmailField(source='assigned_to.email', read_only=True)
+    message_count = serializers.SerializerMethodField()
+    latest_message = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = SupportTicket
+        fields = [
+            'id', 'ticket_number', 'user', 'user_email', 'workspace',
+            'workspace_name', 'subject', 'description', 'status',
+            'priority', 'category', 'assigned_to', 'assigned_to_email',
+            'resolved_at', 'message_count', 'latest_message',
+            'created_at', 'updated_at'
+        ]
+        read_only_fields = ['ticket_number', 'user', 'resolved_at']
+    
+    def get_message_count(self, obj):
+        return obj.messages.count()
+    
+    def get_latest_message(self, obj):
+        latest = obj.messages.order_by('-created_at').first()
+        if latest:
+            return {
+                'message': latest.message[:100] + '...' if len(latest.message) > 100 else latest.message,
+                'sender_email': latest.sender.email,
+                'created_at': latest.created_at
+            }
+        return None

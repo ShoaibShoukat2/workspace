@@ -11,13 +11,14 @@ from django.db.models import Q, Count, Avg
 
 from .models import (
     Job, JobAssignment, JobChecklist, ChecklistStep, StepMedia,
-    JobCompletion, JobNotification, Contractor
+    JobCompletion, JobNotification, Contractor, SupportTicket
 )
 from .serializers import (
     JobAssignmentSerializer, JobChecklistSerializer, ChecklistStepSerializer,
     StepMediaSerializer, JobCompletionSerializer, JobNotificationSerializer,
     ContractorJobDetailSerializer
 )
+from authentication.permissions import IsContractor
 from authentication.permissions import IsAdminOrFM
 
 
@@ -477,6 +478,45 @@ class MarkAllNotificationsReadView(APIView):
         
         return Response({
             'message': 'All notifications marked as read'
+        })
+
+
+# ==================== Contractor Support Access ====================
+
+class ContractorSupportInfoView(APIView):
+    """Get support information for contractor dashboard"""
+    permission_classes = [IsAuthenticated, IsContractor]
+    
+    def get(self, request):
+        contractor = get_object_or_404(Contractor, user=request.user)
+        
+        # Get recent support tickets
+        recent_tickets = SupportTicket.objects.filter(
+            user=request.user
+        ).order_by('-created_at')[:5]
+        
+        # Count open tickets
+        open_tickets_count = SupportTicket.objects.filter(
+            user=request.user,
+            status__in=['OPEN', 'IN_PROGRESS']
+        ).count()
+        
+        return Response({
+            'support_available': True,
+            'open_tickets_count': open_tickets_count,
+            'recent_tickets': [{
+                'ticket_number': ticket.ticket_number,
+                'subject': ticket.subject,
+                'status': ticket.status,
+                'created_at': ticket.created_at
+            } for ticket in recent_tickets],
+            'support_channels': {
+                'automated_support': True,
+                'faq_available': True,
+                'guided_help': True,
+                'human_chat': True,  # This would integrate with Zendesk/FreshDesk/Intercom
+                'email_support': True
+            }
         })
 
 

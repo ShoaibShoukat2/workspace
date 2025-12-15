@@ -49,6 +49,8 @@ from .contractor_views import (
     SubmitJobCompletionView, ContractorCompletedJobsView,
     # Notifications
     ContractorNotificationsView, MarkNotificationReadView, MarkAllNotificationsReadView,
+    # Support
+    ContractorSupportInfoView,
     # Admin/FM Views
     AssignJobToContractorView, VerifyJobCompletionView,
     CreateJobChecklistView, CreateChecklistStepView
@@ -83,6 +85,9 @@ from .investor_views import (
     # Investor Dashboard
     InvestorDashboardView, RevenueStatisticsView, JobVolumeBreakdownView,
     ROIAnalyticsView, PayoutAnalyticsView,
+    # Enhanced Investor Views
+    InvestorActiveWorkOrdersView, InvestorEarningsBreakdownView,
+    InvestorJobCategoriesView, InvestorPropertyPerformanceView,
     # Reports
     DownloadInvestorReportCSVView, DownloadDetailedJobReportCSVView,
     InvestorRecentActivityView
@@ -102,6 +107,41 @@ from .pdf_views import (
     GenerateEstimatePDFView, GenerateJobReportPDFView,
     GeneratePayoutSlipPDFView, GenerateComplianceCertificatePDFView,
     GenerateInvestorReportPDFView
+)
+
+from .customer_views import (
+    # Customer Dashboard
+    CustomerDashboardView, CustomerJobListView, CustomerJobDetailView,
+    # Live GPS Tracking
+    LiveContractorTrackingView, JobTrackingUpdatesView,
+    # Customer Notifications
+    CustomerNotificationsView, MarkNotificationReadView, MarkAllNotificationsReadView,
+    # Material Delivery Tracking
+    JobMaterialDeliveriesView, MaterialDeliveryDetailView,
+    # Customer Profile
+    CustomerProfileView, CustomerPreferencesView,
+    # Issue Reporting
+    ReportIssueView
+)
+
+from .support_views import (
+    # Support Tickets
+    CreateSupportTicketView, SupportTicketListView, SupportTicketDetailView,
+    AddSupportMessageView,
+    # Admin Support
+    AdminSupportTicketsView, AdminSupportTicketDetailView, AdminAddSupportMessageView,
+    SupportStatisticsView,
+    # FAQ and Help
+    SupportFAQView, SupportGuidedHelpView
+)
+
+from .tracking_views import (
+    # GPS Tracking
+    UpdateContractorLocationView, ContractorLocationHistoryView,
+    # Job Tracking
+    UpdateJobTrackingView, JobTrackingDetailView,
+    # Admin Tracking
+    AdminTrackingDashboardView, ContractorTrackingStatusView
 )
 
 app_name = 'workspace'
@@ -209,6 +249,9 @@ urlpatterns = [
     path('contractor/notifications/<int:notification_id>/read/', MarkNotificationReadView.as_view(), name='mark-notification-read'),
     path('contractor/notifications/read-all/', MarkAllNotificationsReadView.as_view(), name='mark-all-notifications-read'),
     
+    # Contractor Support
+    path('contractor/support/info/', ContractorSupportInfoView.as_view(), name='contractor-support-info'),
+    
     # Admin/FM - Contractor Management
     path('admin/assign-job/', AssignJobToContractorView.as_view(), name='assign-job-to-contractor'),
     path('admin/verify-completion/<int:completion_id>/', VerifyJobCompletionView.as_view(), name='verify-job-completion'),
@@ -275,6 +318,12 @@ urlpatterns = [
     path('investor/payout-analytics/', PayoutAnalyticsView.as_view(), name='payout-analytics'),
     path('investor/recent-activity/', InvestorRecentActivityView.as_view(), name='investor-recent-activity'),
     
+    # Enhanced Investor Features
+    path('investor/active-work-orders/', InvestorActiveWorkOrdersView.as_view(), name='investor-active-work-orders'),
+    path('investor/earnings-breakdown/', InvestorEarningsBreakdownView.as_view(), name='investor-earnings-breakdown'),
+    path('investor/job-categories/', InvestorJobCategoriesView.as_view(), name='investor-job-categories'),
+    path('investor/property-performance/', InvestorPropertyPerformanceView.as_view(), name='investor-property-performance'),
+    
     # Investor Reports
     path('investor/reports/download/', DownloadInvestorReportCSVView.as_view(), name='download-investor-report'),
     path('investor/reports/jobs/download/', DownloadDetailedJobReportCSVView.as_view(), name='download-detailed-job-report'),
@@ -309,4 +358,63 @@ urlpatterns = [
     
     # Investor Report PDF
     path('pdf/investor-report/', GenerateInvestorReportPDFView.as_view(), name='generate-investor-report-pdf'),
+    
+    # ==================== Customer Dashboard & GPS Tracking ====================
+    
+    # Customer Dashboard
+    path('customer/dashboard/', CustomerDashboardView.as_view(), name='customer-dashboard'),
+    path('customer/jobs/', CustomerJobListView.as_view(), name='customer-job-list'),
+    path('customer/jobs/<int:job_id>/', CustomerJobDetailView.as_view(), name='customer-job-detail'),
+    
+    # Live GPS Tracking
+    path('customer/jobs/<int:job_id>/tracking/', LiveContractorTrackingView.as_view(), name='live-contractor-tracking'),
+    path('customer/jobs/<int:job_id>/tracking/updates/', JobTrackingUpdatesView.as_view(), name='job-tracking-updates'),
+    
+    # Customer Notifications
+    path('customer/notifications/', CustomerNotificationsView.as_view(), name='customer-notifications'),
+    path('customer/notifications/<int:notification_id>/read/', MarkNotificationReadView.as_view(), name='mark-customer-notification-read'),
+    path('customer/notifications/read-all/', MarkAllNotificationsReadView.as_view(), name='mark-all-customer-notifications-read'),
+    
+    # Material Delivery Tracking
+    path('customer/jobs/<int:job_id>/materials/', JobMaterialDeliveriesView.as_view(), name='job-material-deliveries'),
+    path('customer/materials/<int:delivery_id>/', MaterialDeliveryDetailView.as_view(), name='material-delivery-detail'),
+    
+    # Customer Profile
+    path('customer/profile/', CustomerProfileView.as_view(), name='customer-profile'),
+    path('customer/preferences/', CustomerPreferencesView.as_view(), name='customer-preferences'),
+    
+    # Issue Reporting
+    path('customer/jobs/<int:job_id>/report-issue/', ReportIssueView.as_view(), name='report-issue'),
+    
+    # ==================== Support System ====================
+    
+    # Support Tickets
+    path('support/tickets/create/', CreateSupportTicketView.as_view(), name='create-support-ticket'),
+    path('support/tickets/', SupportTicketListView.as_view(), name='support-ticket-list'),
+    path('support/tickets/<str:ticket_number>/', SupportTicketDetailView.as_view(), name='support-ticket-detail'),
+    path('support/tickets/<str:ticket_number>/messages/', AddSupportMessageView.as_view(), name='add-support-message'),
+    
+    # Admin Support Management
+    path('admin/support/tickets/', AdminSupportTicketsView.as_view(), name='admin-support-tickets'),
+    path('admin/support/tickets/<str:ticket_number>/', AdminSupportTicketDetailView.as_view(), name='admin-support-ticket-detail'),
+    path('admin/support/tickets/<str:ticket_number>/messages/', AdminAddSupportMessageView.as_view(), name='admin-add-support-message'),
+    path('admin/support/statistics/', SupportStatisticsView.as_view(), name='support-statistics'),
+    
+    # FAQ and Automated Support
+    path('support/faq/', SupportFAQView.as_view(), name='support-faq'),
+    path('support/guided-help/', SupportGuidedHelpView.as_view(), name='support-guided-help'),
+    
+    # ==================== GPS Tracking & Job Tracking ====================
+    
+    # Contractor GPS Tracking
+    path('contractor/location/update/', UpdateContractorLocationView.as_view(), name='update-contractor-location'),
+    path('contractor/<int:contractor_id>/location-history/', ContractorLocationHistoryView.as_view(), name='contractor-location-history'),
+    
+    # Job Tracking Management
+    path('jobs/<int:job_id>/tracking/update/', UpdateJobTrackingView.as_view(), name='update-job-tracking'),
+    path('jobs/<int:job_id>/tracking/', JobTrackingDetailView.as_view(), name='job-tracking-detail'),
+    
+    # Admin Tracking Dashboard
+    path('admin/tracking/dashboard/', AdminTrackingDashboardView.as_view(), name='admin-tracking-dashboard'),
+    path('admin/tracking/contractors/', ContractorTrackingStatusView.as_view(), name='contractor-tracking-status'),
 ]

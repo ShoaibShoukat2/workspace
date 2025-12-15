@@ -878,3 +878,322 @@ class JobPayoutEligibility(models.Model):
             models.Index(fields=['contractor', 'status']),
             models.Index(fields=['status']),
         ]
+
+
+# ==================== Customer Dashboard & GPS Tracking Models ====================
+
+class CustomerProfile(models.Model):
+    """Customer profile for dashboard access"""
+    
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='customer_profile')
+    workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, related_name='customers')
+    company_name = models.CharField(max_length=255, blank=True, null=True)
+    address = models.TextField(blank=True, null=True)
+    phone = models.CharField(max_length=20, blank=True, null=True)
+    emergency_contact = models.CharField(max_length=255, blank=True, null=True)
+    emergency_phone = models.CharField(max_length=20, blank=True, null=True)
+    preferred_contact_method = models.CharField(max_length=20, default='EMAIL')
+    notification_preferences = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    def __str__(self):
+        return f"{self.user.email} - {self.company_name or 'Individual'}"
+    
+    class Meta:
+        db_table = 'customer_profiles'
+        unique_together = ['user', 'workspace']
+
+
+class ContractorLocation(models.Model):
+    """Real-time GPS tracking for contractors"""
+    
+    contractor = models.ForeignKey(Contractor, on_delete=models.CASCADE, related_name='locations')
+    job = models.ForeignKey(Job, on_delete=models.CASCADE, related_name='contractor_locations', null=True, blank=True)
+    latitude = models.DecimalField(max_digits=10, decimal_places=8)
+    longitude = models.DecimalField(max_digits=11, decimal_places=8)
+    accuracy = models.FloatField(help_text='GPS accuracy in meters')
+    speed = models.FloatField(null=True, blank=True, help_text='Speed in km/h')
+    heading = models.FloatField(null=True, blank=True, help_text='Direction in degrees')
+    altitude = models.FloatField(null=True, blank=True, help_text='Altitude in meters')
+    is_active = models.BooleanField(default=True)
+    timestamp = models.DateTimeField(auto_now_add=True)
+    
+    def __str__(self):
+        return f"{self.contractor.user.email} - {self.latitude}, {self.longitude}"
+    
+    @property
+    def coordinates(self):
+        return {'lat': float(self.latitude), 'lng': float(self.longitude)}
+    
+    class Meta:
+        db_table = 'contractor_locations'
+        ordering = ['-timestamp']
+        indexes = [
+            models.Index(fields=['contractor', 'timestamp']),
+            models.Index(fields=['job', 'timestamp']),
+            models.Index(fields=['is_active', 'timestamp']),
+        ]
+
+
+class JobTracking(models.Model):
+    """Enhanced job tracking with customer-facing status updates"""
+    
+    class TrackingStatus(models.TextChoices):
+        SCHEDULED = 'SCHEDULED', 'Scheduled'
+        EN_ROUTE = 'EN_ROUTE', 'En Route'
+        ARRIVED = 'ARRIVED', 'Arrived'
+        IN_PROGRESS = 'IN_PROGRESS', 'In Progress'
+        COMPLETED = 'COMPLETED', 'Completed'
+        DELAYED = 'DELAYED', 'Delayed'
+    
+    job = models.OneToOneField(Job, on_delete=models.CASCADE, related_name='tracking')
+    status = models.CharField(max_length=20, choices=TrackingStatus.choices, default=TrackingStatus.SCHEDULED)
+    estimated_arrival = models.DateTimeField(null=True, blank=True)
+    actual_arrival = models.DateTimeField(null=True, blank=True)
+    started_at = models.DateTimeField(null=True, blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    delay_reason = models.TextField(blank=True, null=True)
+    customer_notified = models.BooleanField(default=False)
+    last_location_update = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    def __str__(self):
+        return f"{self.job.job_number} - {self.status}"
+    
+    def update_status(self, new_status, notify_customer=True):
+        """Update tracking status and optionally notify customer"""
+        self.status = new_status
+        self.updated_at = timezone.now()
+        
+        if new_status == 'ARRIVED':
+            self.actual_arrival = timezone.now()
+        elif new_status == 'IN_PROGRESS':
+            self.started_at = timezone.now()
+        elif new_status == 'COMPLETED':
+            self.completed_at = timezone.now()
+        
+        self.save()
+        
+        if notify_customer:
+            self.send_customer_notification(new_status)
+    
+    def send_customer_notification(self, status):
+        """Send notification to customer about status change"""
+        # This would integrate with notification service
+        pass
+    
+    class Meta:
+        db_table = 'job_tracking'
+        indexes = [
+            models.Index(fields=['status', 'updated_at']),
+        ]
+
+
+class CustomerNotification(models.Model):
+    """Notifications sent to customers"""
+    
+    class NotificationType(models.TextChoices):
+        JOB_SCHEDULED = 'JOB_SCHEDULED', 'Job Scheduled'
+        TECH_EN_ROUTE = 'TECH_EN_ROUTE', 'Technician En Route'
+        TECH_ARRIVED = 'TECH_ARRIVED', 'Technician Arrived'
+        JOB_STARTED = 'JOB_STARTED', 'Job Started'
+        JOB_COMPLETED = 'JOB_COMPLETED', 'Job Completed'
+        JOB_DELAYED = 'JOB_DELAYED', 'Job Delayed'
+        MATERIAL_DELIVERED = 'MATERIAL_DELIVERED', 'Material Delivered'
+    
+    customer = models.ForeignKey(CustomerProfile, on_delete=models.CASCADE, related_name='notifications')
+    job = models.ForeignKey(Job, on_delete=models.CASCADE, related_name='customer_notifications')
+    notification_type = models.CharField(max_length=30, choices=NotificationType.choices)
+    title = models.CharField(max_length=255)
+    message = models.TextField()
+    sent_via = models.CharField(max_length=20, default='EMAIL')  # EMAIL, SMS, PUSH
+    is_read = models.BooleanField(default=False)
+    sent_at = models.DateTimeField(auto_now_add=True)
+    read_at = models.DateTimeField(null=True, blank=True)
+    
+    def __str__(self):
+        return f"{self.customer.user.email} - {self.title}"
+    
+    class Meta:
+        db_table = 'customer_notifications'
+        ordering = ['-sent_at']
+
+
+class MaterialDelivery(models.Model):
+    """Track material deliveries for jobs"""
+    
+    class DeliveryStatus(models.TextChoices):
+        ORDERED = 'ORDERED', 'Ordered'
+        SHIPPED = 'SHIPPED', 'Shipped'
+        OUT_FOR_DELIVERY = 'OUT_FOR_DELIVERY', 'Out for Delivery'
+        DELIVERED = 'DELIVERED', 'Delivered'
+        DELAYED = 'DELAYED', 'Delayed'
+        CANCELLED = 'CANCELLED', 'Cancelled'
+    
+    job = models.ForeignKey(Job, on_delete=models.CASCADE, related_name='material_deliveries')
+    item_name = models.CharField(max_length=255)
+    quantity = models.IntegerField()
+    supplier = models.CharField(max_length=255, blank=True, null=True)
+    tracking_number = models.CharField(max_length=100, blank=True, null=True)
+    status = models.CharField(max_length=20, choices=DeliveryStatus.choices, default=DeliveryStatus.ORDERED)
+    ordered_date = models.DateField(auto_now_add=True)
+    expected_delivery = models.DateField(null=True, blank=True)
+    actual_delivery = models.DateTimeField(null=True, blank=True)
+    delivery_photo = models.CharField(max_length=500, blank=True, null=True)
+    delivery_notes = models.TextField(blank=True, null=True)
+    received_by = models.CharField(max_length=255, blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    def __str__(self):
+        return f"{self.job.job_number} - {self.item_name}"
+    
+    class Meta:
+        db_table = 'material_deliveries'
+        ordering = ['-created_at']
+
+
+# ==================== Enhanced Investor Models ====================
+
+class InvestorProfile(models.Model):
+    """Investor profile with enhanced tracking"""
+    
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='investor_profile')
+    workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, related_name='investors')
+    investment_amount = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    profit_share_percentage = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    total_earnings = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    total_payouts_received = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    roi_percentage = models.DecimalField(max_digits=8, decimal_places=4, default=0)
+    investment_date = models.DateField()
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    def __str__(self):
+        return f"{self.user.email} - {self.profit_share_percentage}%"
+    
+    def calculate_roi(self):
+        """Calculate current ROI"""
+        if self.investment_amount > 0:
+            self.roi_percentage = (self.total_earnings / self.investment_amount) * 100
+            self.save(update_fields=['roi_percentage'])
+        return self.roi_percentage
+    
+    class Meta:
+        db_table = 'investor_profiles'
+        unique_together = ['user', 'workspace']
+
+
+class PropertyInvestment(models.Model):
+    """Track property-level investments and performance"""
+    
+    investor = models.ForeignKey(InvestorProfile, on_delete=models.CASCADE, related_name='property_investments')
+    property_name = models.CharField(max_length=255)
+    property_address = models.TextField()
+    investment_amount = models.DecimalField(max_digits=15, decimal_places=2)
+    total_revenue = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    total_profit = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    active_jobs_count = models.IntegerField(default=0)
+    completed_jobs_count = models.IntegerField(default=0)
+    issues_flagged = models.IntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    def __str__(self):
+        return f"{self.property_name} - {self.investor.user.email}"
+    
+    class Meta:
+        db_table = 'property_investments'
+        ordering = ['-created_at']
+
+
+class InvestorPayout(models.Model):
+    """Track payouts to investors"""
+    
+    class PayoutStatus(models.TextChoices):
+        PENDING = 'PENDING', 'Pending'
+        PROCESSING = 'PROCESSING', 'Processing'
+        COMPLETED = 'COMPLETED', 'Completed'
+        FAILED = 'FAILED', 'Failed'
+    
+    investor = models.ForeignKey(InvestorProfile, on_delete=models.CASCADE, related_name='payouts')
+    job = models.ForeignKey(Job, on_delete=models.CASCADE, related_name='investor_payouts', null=True, blank=True)
+    property_investment = models.ForeignKey(PropertyInvestment, on_delete=models.CASCADE, related_name='payouts', null=True, blank=True)
+    payout_number = models.CharField(max_length=50, unique=True)
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    apex_earnings = models.DecimalField(max_digits=12, decimal_places=2)
+    investor_earnings = models.DecimalField(max_digits=12, decimal_places=2)
+    profit_split_percentage = models.DecimalField(max_digits=5, decimal_places=2)
+    status = models.CharField(max_length=20, choices=PayoutStatus.choices, default=PayoutStatus.PENDING)
+    payout_date = models.DateField(null=True, blank=True)
+    processed_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
+    notes = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    def __str__(self):
+        return f"{self.payout_number} - {self.investor.user.email} - ${self.amount}"
+    
+    class Meta:
+        db_table = 'investor_payouts'
+        ordering = ['-created_at']
+
+
+# ==================== Support System Models ====================
+
+class SupportTicket(models.Model):
+    """Support tickets for contractors and customers"""
+    
+    class TicketStatus(models.TextChoices):
+        OPEN = 'OPEN', 'Open'
+        IN_PROGRESS = 'IN_PROGRESS', 'In Progress'
+        WAITING_RESPONSE = 'WAITING_RESPONSE', 'Waiting for Response'
+        RESOLVED = 'RESOLVED', 'Resolved'
+        CLOSED = 'CLOSED', 'Closed'
+    
+    class Priority(models.TextChoices):
+        LOW = 'LOW', 'Low'
+        MEDIUM = 'MEDIUM', 'Medium'
+        HIGH = 'HIGH', 'High'
+        URGENT = 'URGENT', 'Urgent'
+    
+    ticket_number = models.CharField(max_length=50, unique=True)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='support_tickets')
+    workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, related_name='support_tickets')
+    subject = models.CharField(max_length=255)
+    description = models.TextField()
+    status = models.CharField(max_length=20, choices=TicketStatus.choices, default=TicketStatus.OPEN)
+    priority = models.CharField(max_length=10, choices=Priority.choices, default=Priority.MEDIUM)
+    category = models.CharField(max_length=50, blank=True, null=True)
+    assigned_to = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='assigned_tickets')
+    resolved_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    def __str__(self):
+        return f"{self.ticket_number} - {self.subject}"
+    
+    class Meta:
+        db_table = 'support_tickets'
+        ordering = ['-created_at']
+
+
+class SupportMessage(models.Model):
+    """Messages in support tickets"""
+    
+    ticket = models.ForeignKey(SupportTicket, on_delete=models.CASCADE, related_name='messages')
+    sender = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    message = models.TextField()
+    is_internal = models.BooleanField(default=False)
+    attachments = models.JSONField(default=list, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    def __str__(self):
+        return f"{self.ticket.ticket_number} - {self.sender.email}"
+    
+    class Meta:
+        db_table = 'support_messages'
+        ordering = ['created_at']
