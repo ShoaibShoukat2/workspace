@@ -1021,38 +1021,36 @@ class CustomerNotification(models.Model):
         ordering = ['-sent_at']
 
 
-class MaterialDelivery(models.Model):
-    """Track material deliveries for jobs"""
+class MaterialReference(models.Model):
+    """Reference materials for jobs - READ ONLY for price transparency"""
     
-    class DeliveryStatus(models.TextChoices):
-        ORDERED = 'ORDERED', 'Ordered'
-        SHIPPED = 'SHIPPED', 'Shipped'
-        OUT_FOR_DELIVERY = 'OUT_FOR_DELIVERY', 'Out for Delivery'
-        DELIVERED = 'DELIVERED', 'Delivered'
-        DELAYED = 'DELAYED', 'Delayed'
-        CANCELLED = 'CANCELLED', 'Cancelled'
-    
-    job = models.ForeignKey(Job, on_delete=models.CASCADE, related_name='material_deliveries')
+    job = models.ForeignKey(Job, on_delete=models.CASCADE, related_name='material_references')
     item_name = models.CharField(max_length=255)
     quantity = models.IntegerField()
-    supplier = models.CharField(max_length=255, blank=True, null=True)
-    tracking_number = models.CharField(max_length=100, blank=True, null=True)
-    status = models.CharField(max_length=20, choices=DeliveryStatus.choices, default=DeliveryStatus.ORDERED)
-    ordered_date = models.DateField(auto_now_add=True)
-    expected_delivery = models.DateField(null=True, blank=True)
-    actual_delivery = models.DateTimeField(null=True, blank=True)
-    delivery_photo = models.CharField(max_length=500, blank=True, null=True)
-    delivery_notes = models.TextField(blank=True, null=True)
-    received_by = models.CharField(max_length=255, blank=True, null=True)
+    supplier = models.CharField(max_length=255)
+    supplier_logo = models.URLField(blank=True, null=True)
+    sku = models.CharField(max_length=100, blank=True, null=True)
+    price_low = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    price_high = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    purchase_url = models.URLField(help_text='Direct link to vendor checkout page')
+    description = models.TextField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
     def __str__(self):
         return f"{self.job.job_number} - {self.item_name}"
     
+    @property
+    def price_range(self):
+        if self.price_low and self.price_high:
+            return f"${self.price_low} - ${self.price_high}"
+        elif self.price_low:
+            return f"${self.price_low}+"
+        return "Price varies"
+    
     class Meta:
-        db_table = 'material_deliveries'
-        ordering = ['-created_at']
+        db_table = 'material_references'
+        ordering = ['item_name']
 
 
 # ==================== Enhanced Investor Models ====================
@@ -1197,3 +1195,374 @@ class SupportMessage(models.Model):
     class Meta:
         db_table = 'support_messages'
         ordering = ['created_at']
+
+
+# ==================== Angi Integration Models ====================
+
+class AngiConnection(models.Model):
+    """OAuth connection to Angi for lead scraping"""
+    
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='angi_connection')
+    workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, related_name='angi_connections')
+    access_token = models.TextField()
+    refresh_token = models.TextField(blank=True, null=True)
+    token_expires_at = models.DateTimeField()
+    angi_account_id = models.CharField(max_length=100)
+    is_active = models.BooleanField(default=True)
+    last_sync = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    def __str__(self):
+        return f"{self.user.email} - Angi Connection"
+    
+    @property
+    def is_token_expired(self):
+        return timezone.now() > self.token_expires_at
+    
+    class Meta:
+        db_table = 'angi_connections'
+
+
+class Lead(models.Model):
+    """Lead management system"""
+    
+    class LeadSource(models.TextChoices):
+        ANGI = 'ANGI', 'Angi'
+        MANUAL = 'MANUAL', 'Manual Entry'
+        WEBSITE = 'WEBSITE', 'Website'
+        REFERRAL = 'REFERRAL', 'Referral'
+        OTHER = 'OTHER', 'Other'
+    
+    class LeadStatus(models.TextChoices):
+        NEW = 'NEW', 'New'
+        CONTACTED = 'CONTACTED', 'Contacted'
+        QUALIFIED = 'QUALIFIED', 'Qualified'
+        APPOINTMENT_SCHEDULED = 'APPOINTMENT_SCHEDULED', 'Appointment Scheduled'
+        CONVERTED = 'CONVERTED', 'Converted to Job'
+        LOST = 'LOST', 'Lost'
+    
+    workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, related_name='leads')
+    lead_number = models.CharField(max_length=50, unique=True, db_index=True)
+    source = models.CharField(max_length=20, choices=LeadSource.choices)
+    status = models.CharField(max_length=30, choices=LeadStatus.choices, default=LeadStatus.NEW)
+    
+    # Customer Information
+    customer_name = models.CharField(max_length=255)
+    customer_phone = models.CharField(max_length=20)
+    customer_email = models.EmailField(blank=True, null=True)
+    
+    # Service Information
+    service_type = models.CharField(max_length=255)
+    location = models.TextField()
+    description = models.TextField()
+    
+    # Angi-specific fields
+    angi_lead_id = models.CharField(max_length=100, blank=True, null=True)
+    angi_connection = models.ForeignKey(AngiConnection, on_delete=models.SET_NULL, null=True, blank=True)
+    
+    # AI Processing
+    ai_contacted = models.BooleanField(default=False)
+    ai_contact_preference = models.CharField(max_length=20, blank=True, null=True)  # CALL, TEXT
+    
+    # Conversion
+    converted_job = models.OneToOneField(Job, on_delete=models.SET_NULL, null=True, blank=True, related_name='source_lead')
+    
+    # Tracking
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
+    assigned_to = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='assigned_leads')
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    def __str__(self):
+        return f"{self.lead_number} - {self.customer_name}"
+    
+    class Meta:
+        db_table = 'leads'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['workspace', 'status']),
+            models.Index(fields=['source', 'created_at']),
+        ]
+
+
+class LeadActivity(models.Model):
+    """Track lead interaction history"""
+    
+    class ActivityType(models.TextChoices):
+        AI_TEXT_SENT = 'AI_TEXT_SENT', 'AI Text Sent'
+        AI_CALL_MADE = 'AI_CALL_MADE', 'AI Call Made'
+        APPOINTMENT_SCHEDULED = 'APPOINTMENT_SCHEDULED', 'Appointment Scheduled'
+        STATUS_CHANGED = 'STATUS_CHANGED', 'Status Changed'
+        NOTE_ADDED = 'NOTE_ADDED', 'Note Added'
+        EMAIL_SENT = 'EMAIL_SENT', 'Email Sent'
+    
+    lead = models.ForeignKey(Lead, on_delete=models.CASCADE, related_name='activities')
+    activity_type = models.CharField(max_length=30, choices=ActivityType.choices)
+    description = models.TextField()
+    performed_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    def __str__(self):
+        return f"{self.lead.lead_number} - {self.activity_type}"
+    
+    class Meta:
+        db_table = 'lead_activities'
+        ordering = ['-created_at']
+
+
+# ==================== Price Intelligence System ====================
+
+class PriceIntelligence(models.Model):
+    """Market pricing data for materials"""
+    
+    class Supplier(models.TextChoices):
+        HOME_DEPOT = 'HOME_DEPOT', 'Home Depot'
+        LOWES = 'LOWES', "Lowe's"
+        SHERWIN_WILLIAMS = 'SHERWIN_WILLIAMS', 'Sherwin Williams'
+        MENARDS = 'MENARDS', 'Menards'
+        AMAZON = 'AMAZON', 'Amazon'
+        OTHER = 'OTHER', 'Other'
+    
+    material_name = models.CharField(max_length=255, db_index=True)
+    sku = models.CharField(max_length=100, blank=True, null=True)
+    supplier = models.CharField(max_length=20, choices=Supplier.choices)
+    category = models.CharField(max_length=100, blank=True, null=True)
+    
+    # Pricing
+    current_price = models.DecimalField(max_digits=10, decimal_places=2)
+    previous_price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    price_per_unit = models.CharField(max_length=50, blank=True, null=True)  # per sq ft, per gallon, etc.
+    
+    # Product Details
+    brand = models.CharField(max_length=100, blank=True, null=True)
+    description = models.TextField(blank=True, null=True)
+    product_url = models.URLField()
+    image_url = models.URLField(blank=True, null=True)
+    
+    # Availability
+    in_stock = models.BooleanField(default=True)
+    stock_level = models.CharField(max_length=50, blank=True, null=True)
+    
+    # Tracking
+    last_scraped = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    def __str__(self):
+        return f"{self.material_name} - {self.supplier} - ${self.current_price}"
+    
+    @property
+    def price_change_percentage(self):
+        if self.previous_price and self.previous_price > 0:
+            return ((self.current_price - self.previous_price) / self.previous_price) * 100
+        return 0
+    
+    class Meta:
+        db_table = 'price_intelligence'
+        unique_together = ['material_name', 'sku', 'supplier']
+        indexes = [
+            models.Index(fields=['material_name', 'supplier']),
+            models.Index(fields=['last_scraped']),
+        ]
+
+
+# ==================== Insurance Verification System ====================
+
+class InsuranceVerification(models.Model):
+    """Insurance verification for contractors"""
+    
+    class VerificationStatus(models.TextChoices):
+        PENDING = 'PENDING', 'Pending Verification'
+        ACTIVE = 'ACTIVE', 'Active & Valid'
+        EXPIRED = 'EXPIRED', 'Expired'
+        INVALID = 'INVALID', 'Invalid'
+        CO_INSURED_MISSING = 'CO_INSURED_MISSING', 'Apex Not Co-Insured'
+    
+    contractor = models.OneToOneField(Contractor, on_delete=models.CASCADE, related_name='insurance_verification')
+    
+    # Insurance Details
+    insurance_company = models.CharField(max_length=255)
+    policy_number = models.CharField(max_length=100)
+    coverage_amount = models.DecimalField(max_digits=15, decimal_places=2)
+    effective_date = models.DateField()
+    expiry_date = models.DateField()
+    
+    # Verification Status
+    status = models.CharField(max_length=30, choices=VerificationStatus.choices, default=VerificationStatus.PENDING)
+    apex_co_insured = models.BooleanField(default=False)
+    
+    # Document Management
+    document_path = models.CharField(max_length=500)
+    document_parsed_data = models.JSONField(default=dict, blank=True)
+    
+    # Verification History
+    last_verified = models.DateTimeField(null=True, blank=True)
+    verified_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
+    verification_notes = models.TextField(blank=True, null=True)
+    
+    # Auto-flagging
+    auto_flagged = models.BooleanField(default=False)
+    flag_reason = models.TextField(blank=True, null=True)
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    def __str__(self):
+        return f"{self.contractor.user.email} - {self.status}"
+    
+    @property
+    def is_expiring_soon(self):
+        """Check if insurance expires within 30 days"""
+        if self.expiry_date:
+            days_until_expiry = (self.expiry_date - timezone.now().date()).days
+            return 0 < days_until_expiry <= 30
+        return False
+    
+    @property
+    def is_expired(self):
+        """Check if insurance is expired"""
+        return self.expiry_date < timezone.now().date()
+    
+    def verify_insurance(self, admin_user, notes=''):
+        """Mark insurance as verified"""
+        self.status = 'ACTIVE'
+        self.last_verified = timezone.now()
+        self.verified_by = admin_user
+        self.verification_notes = notes
+        self.save()
+    
+    class Meta:
+        db_table = 'insurance_verifications'
+
+
+# ==================== AI Voice Agent System ====================
+
+class AIConversation(models.Model):
+    """AI voice agent conversations with leads"""
+    
+    class ConversationType(models.TextChoices):
+        INITIAL_CONTACT = 'INITIAL_CONTACT', 'Initial Contact'
+        APPOINTMENT_SCHEDULING = 'APPOINTMENT_SCHEDULING', 'Appointment Scheduling'
+        FOLLOW_UP = 'FOLLOW_UP', 'Follow Up'
+        QUALIFICATION = 'QUALIFICATION', 'Lead Qualification'
+    
+    class ConversationStatus(models.TextChoices):
+        INITIATED = 'INITIATED', 'Initiated'
+        IN_PROGRESS = 'IN_PROGRESS', 'In Progress'
+        COMPLETED = 'COMPLETED', 'Completed'
+        FAILED = 'FAILED', 'Failed'
+    
+    lead = models.ForeignKey(Lead, on_delete=models.CASCADE, related_name='ai_conversations')
+    conversation_type = models.CharField(max_length=30, choices=ConversationType.choices)
+    status = models.CharField(max_length=20, choices=ConversationStatus.choices, default=ConversationStatus.INITIATED)
+    
+    # Communication Details
+    phone_number = models.CharField(max_length=20)
+    preferred_method = models.CharField(max_length=10)  # CALL, TEXT
+    
+    # Conversation Data
+    conversation_transcript = models.TextField(blank=True, null=True)
+    ai_responses = models.JSONField(default=list, blank=True)
+    customer_responses = models.JSONField(default=list, blank=True)
+    
+    # Outcomes
+    appointment_scheduled = models.BooleanField(default=False)
+    scheduled_datetime = models.DateTimeField(null=True, blank=True)
+    customer_qualified = models.BooleanField(default=False)
+    qualification_score = models.IntegerField(null=True, blank=True)
+    
+    # Technical Details
+    call_sid = models.CharField(max_length=100, blank=True, null=True)  # Twilio Call SID
+    recording_url = models.URLField(blank=True, null=True)
+    duration_seconds = models.IntegerField(null=True, blank=True)
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    
+    def __str__(self):
+        return f"{self.lead.lead_number} - {self.conversation_type}"
+    
+    class Meta:
+        db_table = 'ai_conversations'
+        ordering = ['-created_at']
+
+
+class TwilioIntegration(models.Model):
+    """Twilio SMS and Voice integration settings"""
+    
+    workspace = models.OneToOneField(Workspace, on_delete=models.CASCADE, related_name='twilio_integration')
+    
+    # Twilio Credentials
+    account_sid = models.CharField(max_length=100)
+    auth_token = models.CharField(max_length=100)
+    phone_number = models.CharField(max_length=20)
+    
+    # Settings
+    sms_enabled = models.BooleanField(default=True)
+    voice_enabled = models.BooleanField(default=True)
+    recording_enabled = models.BooleanField(default=False)
+    
+    # Webhooks
+    sms_webhook_url = models.URLField(blank=True, null=True)
+    voice_webhook_url = models.URLField(blank=True, null=True)
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    def __str__(self):
+        return f"{self.workspace.name} - Twilio Integration"
+    
+    class Meta:
+        db_table = 'twilio_integrations'
+
+
+class CommunicationLog(models.Model):
+    """Log all SMS and voice communications"""
+    
+    class MessageType(models.TextChoices):
+        SMS_OUTBOUND = 'SMS_OUTBOUND', 'SMS Outbound'
+        SMS_INBOUND = 'SMS_INBOUND', 'SMS Inbound'
+        VOICE_OUTBOUND = 'VOICE_OUTBOUND', 'Voice Outbound'
+        VOICE_INBOUND = 'VOICE_INBOUND', 'Voice Inbound'
+    
+    class MessageStatus(models.TextChoices):
+        QUEUED = 'QUEUED', 'Queued'
+        SENT = 'SENT', 'Sent'
+        DELIVERED = 'DELIVERED', 'Delivered'
+        FAILED = 'FAILED', 'Failed'
+        RECEIVED = 'RECEIVED', 'Received'
+    
+    workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, related_name='communication_logs')
+    lead = models.ForeignKey(Lead, on_delete=models.CASCADE, related_name='communications', null=True, blank=True)
+    ai_conversation = models.ForeignKey(AIConversation, on_delete=models.CASCADE, related_name='communications', null=True, blank=True)
+    
+    # Message Details
+    message_type = models.CharField(max_length=20, choices=MessageType.choices)
+    status = models.CharField(max_length=20, choices=MessageStatus.choices)
+    
+    # Contact Information
+    from_number = models.CharField(max_length=20)
+    to_number = models.CharField(max_length=20)
+    
+    # Content
+    message_body = models.TextField(blank=True, null=True)
+    
+    # Twilio Details
+    twilio_sid = models.CharField(max_length=100, blank=True, null=True)
+    recording_url = models.URLField(blank=True, null=True)
+    duration_seconds = models.IntegerField(null=True, blank=True)
+    
+    # Metadata
+    cost = models.DecimalField(max_digits=8, decimal_places=4, null=True, blank=True)
+    error_message = models.TextField(blank=True, null=True)
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    def __str__(self):
+        return f"{self.message_type} - {self.to_number} - {self.status}"
+    
+    class Meta:
+        db_table = 'communication_logs'
+        ordering = ['-created_at']

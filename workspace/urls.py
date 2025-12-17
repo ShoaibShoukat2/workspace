@@ -116,8 +116,9 @@ from .customer_views import (
     LiveContractorTrackingView, JobTrackingUpdatesView,
     # Customer Notifications
     CustomerNotificationsView, MarkNotificationReadView, MarkAllNotificationsReadView,
-    # Material Delivery Tracking
-    JobMaterialDeliveriesView, MaterialDeliveryDetailView,
+    # Material Reference Viewing
+    JobMaterialReferencesView as CustomerJobMaterialReferencesView, 
+    MaterialReferenceDetailView as CustomerMaterialReferenceDetailView,
     # Customer Profile
     CustomerProfileView, CustomerPreferencesView,
     # Issue Reporting
@@ -142,6 +143,42 @@ from .tracking_views import (
     UpdateJobTrackingView, JobTrackingDetailView,
     # Admin Tracking
     AdminTrackingDashboardView, ContractorTrackingStatusView
+)
+
+from .angi_views import (
+    # Angi OAuth
+    AngiOAuthInitiateView, AngiOAuthCallbackView, AngiConnectionStatusView, DisconnectAngiView,
+    # Lead Management
+    LeadListCreateView, LeadDetailView, LeadActivitiesView, ConvertLeadToJobView,
+    # Lead Scraping
+    SyncAngiLeadsView, LeadStatisticsView
+)
+
+from .price_intelligence_views import (
+    # Price Intelligence
+    PriceIntelligenceListView, MaterialPriceComparisonView, MaterialSearchView,
+    # Price Scraping
+    TriggerPriceScrapingView, AutoScrapingScheduleView,
+    # Material References
+    JobMaterialReferencesView, MaterialReferenceDetailView, UpdateMaterialPricingView,
+    # Analytics
+    PriceAnalyticsView
+)
+
+from .insurance_views import (
+    # Insurance Verification
+    InsuranceVerificationListView, ContractorInsuranceView, ApproveInsuranceView, RejectInsuranceView,
+    # Compliance Dashboard
+    InsuranceComplianceDashboardView, InsuranceExpiryNotificationsView
+)
+
+from .ai_voice_views import (
+    # AI Voice Agent
+    TriggerAIContactView, AIConversationListView, AIConversationDetailView,
+    # Twilio Webhooks
+    TwilioSMSWebhookView, TwilioVoiceWebhookView,
+    # Twilio Integration
+    TwilioIntegrationView, CommunicationLogView, AIPerformanceAnalyticsView
 )
 
 app_name = 'workspace'
@@ -375,9 +412,9 @@ urlpatterns = [
     path('customer/notifications/<int:notification_id>/read/', MarkNotificationReadView.as_view(), name='mark-customer-notification-read'),
     path('customer/notifications/read-all/', MarkAllNotificationsReadView.as_view(), name='mark-all-customer-notifications-read'),
     
-    # Material Delivery Tracking
-    path('customer/jobs/<int:job_id>/materials/', JobMaterialDeliveriesView.as_view(), name='job-material-deliveries'),
-    path('customer/materials/<int:delivery_id>/', MaterialDeliveryDetailView.as_view(), name='material-delivery-detail'),
+    # Material Reference Viewing (Read-Only)
+    path('customer/jobs/<int:job_id>/materials/', CustomerJobMaterialReferencesView.as_view(), name='customer-job-material-references'),
+    path('customer/materials/<int:reference_id>/', CustomerMaterialReferenceDetailView.as_view(), name='customer-material-reference-detail'),
     
     # Customer Profile
     path('customer/profile/', CustomerProfileView.as_view(), name='customer-profile'),
@@ -417,4 +454,69 @@ urlpatterns = [
     # Admin Tracking Dashboard
     path('admin/tracking/dashboard/', AdminTrackingDashboardView.as_view(), name='admin-tracking-dashboard'),
     path('admin/tracking/contractors/', ContractorTrackingStatusView.as_view(), name='contractor-tracking-status'),
+    
+    # ==================== Angi Integration & Lead Management ====================
+    
+    # Angi OAuth Integration
+    path('angi/oauth/initiate/', AngiOAuthInitiateView.as_view(), name='angi-oauth-initiate'),
+    path('angi/oauth/callback/', AngiOAuthCallbackView.as_view(), name='angi-oauth-callback'),
+    path('angi/connection/status/', AngiConnectionStatusView.as_view(), name='angi-connection-status'),
+    path('angi/disconnect/', DisconnectAngiView.as_view(), name='disconnect-angi'),
+    
+    # Lead Management
+    path('leads/', LeadListCreateView.as_view(), name='lead-list-create'),
+    path('leads/<int:pk>/', LeadDetailView.as_view(), name='lead-detail'),
+    path('leads/<int:lead_id>/activities/', LeadActivitiesView.as_view(), name='lead-activities'),
+    path('leads/<int:lead_id>/convert/', ConvertLeadToJobView.as_view(), name='convert-lead-to-job'),
+    
+    # Angi Lead Scraping
+    path('angi/sync-leads/', SyncAngiLeadsView.as_view(), name='sync-angi-leads'),
+    path('leads/statistics/', LeadStatisticsView.as_view(), name='lead-statistics'),
+    
+    # ==================== Price Intelligence System ====================
+    
+    # Price Intelligence
+    path('price-intelligence/', PriceIntelligenceListView.as_view(), name='price-intelligence-list'),
+    path('price-intelligence/compare/', MaterialPriceComparisonView.as_view(), name='material-price-comparison'),
+    path('price-intelligence/search/', MaterialSearchView.as_view(), name='material-search'),
+    
+    # Price Scraping
+    path('price-intelligence/scrape/', TriggerPriceScrapingView.as_view(), name='trigger-price-scraping'),
+    path('price-intelligence/auto-scrape/', AutoScrapingScheduleView.as_view(), name='auto-scraping-schedule'),
+    
+    # Material References for Jobs
+    path('jobs/<int:job_id>/materials/', JobMaterialReferencesView.as_view(), name='job-material-references'),
+    path('materials/<int:pk>/', MaterialReferenceDetailView.as_view(), name='material-reference-detail'),
+    path('materials/<int:material_ref_id>/update-pricing/', UpdateMaterialPricingView.as_view(), name='update-material-pricing'),
+    
+    # Price Analytics
+    path('price-intelligence/analytics/', PriceAnalyticsView.as_view(), name='price-analytics'),
+    
+    # ==================== Insurance Verification System ====================
+    
+    # Insurance Verification
+    path('insurance/verifications/', InsuranceVerificationListView.as_view(), name='insurance-verification-list'),
+    path('contractors/<int:contractor_id>/insurance/', ContractorInsuranceView.as_view(), name='contractor-insurance'),
+    path('insurance/<int:insurance_id>/approve/', ApproveInsuranceView.as_view(), name='approve-insurance'),
+    path('insurance/<int:insurance_id>/reject/', RejectInsuranceView.as_view(), name='reject-insurance'),
+    
+    # Insurance Compliance Dashboard
+    path('admin/insurance/dashboard/', InsuranceComplianceDashboardView.as_view(), name='insurance-compliance-dashboard'),
+    path('admin/insurance/expiry-notifications/', InsuranceExpiryNotificationsView.as_view(), name='insurance-expiry-notifications'),
+    
+    # ==================== AI Voice Agent System ====================
+    
+    # AI Voice Agent
+    path('ai/contact-lead/<int:lead_id>/', TriggerAIContactView.as_view(), name='trigger-ai-contact'),
+    path('ai/conversations/', AIConversationListView.as_view(), name='ai-conversation-list'),
+    path('ai/conversations/<int:pk>/', AIConversationDetailView.as_view(), name='ai-conversation-detail'),
+    
+    # Twilio Webhooks (Public)
+    path('webhooks/twilio/sms/', TwilioSMSWebhookView.as_view(), name='twilio-sms-webhook'),
+    path('webhooks/twilio/voice/', TwilioVoiceWebhookView.as_view(), name='twilio-voice-webhook'),
+    
+    # Twilio Integration Management
+    path('admin/twilio/integration/', TwilioIntegrationView.as_view(), name='twilio-integration'),
+    path('admin/communications/', CommunicationLogView.as_view(), name='communication-log'),
+    path('admin/ai/analytics/', AIPerformanceAnalyticsView.as_view(), name='ai-performance-analytics'),
 ]

@@ -9,11 +9,11 @@ from datetime import datetime, timedelta
 
 from .models import (
     Job, JobTracking, ContractorLocation, CustomerProfile, 
-    CustomerNotification, MaterialDelivery, Contractor
+    CustomerNotification, MaterialReference, Contractor
 )
 from .serializers import (
     JobSerializer, JobTrackingSerializer, ContractorLocationSerializer,
-    CustomerProfileSerializer, CustomerNotificationSerializer, MaterialDeliverySerializer
+    CustomerProfileSerializer, CustomerNotificationSerializer, MaterialReferenceSerializer
 )
 from authentication.permissions import IsCustomer
 
@@ -133,9 +133,9 @@ class CustomerJobDetailView(APIView):
                 except Contractor.DoesNotExist:
                     pass
         
-        # Add material deliveries
-        material_deliveries = MaterialDelivery.objects.filter(job=job)
-        job_data['material_deliveries'] = MaterialDeliverySerializer(material_deliveries, many=True).data
+        # Add material references (read-only)
+        material_references = MaterialReference.objects.filter(job=job)
+        job_data['material_references'] = MaterialReferenceSerializer(material_references, many=True).data
         
         # Add contractor information
         if job.assigned_to:
@@ -296,11 +296,11 @@ class MarkAllNotificationsReadView(APIView):
         return Response({'message': 'All notifications marked as read'})
 
 
-# ==================== Material Delivery Tracking ====================
+# ==================== Material Reference Viewing (Read-Only) ====================
 
-class JobMaterialDeliveriesView(generics.ListAPIView):
-    """List material deliveries for a job"""
-    serializer_class = MaterialDeliverySerializer
+class JobMaterialReferencesView(generics.ListAPIView):
+    """List material references for a job (read-only for price transparency)"""
+    serializer_class = MaterialReferenceSerializer
     permission_classes = [IsAuthenticated, IsCustomer]
     
     def get_queryset(self):
@@ -312,23 +312,28 @@ class JobMaterialDeliveriesView(generics.ListAPIView):
             customer_email=self.request.user.email,
             workspace=customer_profile.workspace
         )
-        return MaterialDelivery.objects.filter(job=job).order_by('-created_at')
+        return MaterialReference.objects.filter(job=job).order_by('item_name')
 
 
-class MaterialDeliveryDetailView(APIView):
-    """Get detailed material delivery information"""
+class MaterialReferenceDetailView(APIView):
+    """Get detailed material reference information with purchase links"""
     permission_classes = [IsAuthenticated, IsCustomer]
     
-    def get(self, request, delivery_id):
+    def get(self, request, reference_id):
         customer_profile = get_object_or_404(CustomerProfile, user=request.user)
-        delivery = get_object_or_404(MaterialDelivery, id=delivery_id)
+        material_ref = get_object_or_404(MaterialReference, id=reference_id)
         
         # Verify customer owns this job
-        if delivery.job.customer_email != request.user.email:
+        if material_ref.job.customer_email != request.user.email:
             return Response({'error': 'Permission denied'}, 
                           status=status.HTTP_403_FORBIDDEN)
         
-        return Response(MaterialDeliverySerializer(delivery).data)
+        material_data = MaterialReferenceSerializer(material_ref).data
+        
+        # Add disclaimer
+        material_data['disclaimer'] = "Materials are purchased directly by the customer from suppliers. Apex does not handle material logistics or delivery."
+        
+        return Response(material_data)
 
 
 # ==================== Customer Profile Management ====================

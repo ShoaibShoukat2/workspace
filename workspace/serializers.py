@@ -9,8 +9,11 @@ from .models import (
     Dispute, DisputeMessage, DisputeAttachment,
     # New models
     CustomerProfile, ContractorLocation, JobTracking, CustomerNotification,
-    MaterialDelivery, InvestorProfile, PropertyInvestment, InvestorPayout,
-    SupportTicket, SupportMessage
+    MaterialReference, InvestorProfile, PropertyInvestment, InvestorPayout,
+    SupportTicket, SupportMessage,
+    # Angi and AI models
+    AngiConnection, Lead, LeadActivity, PriceIntelligence,
+    InsuranceVerification, AIConversation, TwilioIntegration, CommunicationLog
 )
 
 User = get_user_model()
@@ -535,20 +538,19 @@ class CustomerNotificationSerializer(serializers.ModelSerializer):
         read_only_fields = ['customer', 'sent_at', 'read_at']
 
 
-class MaterialDeliverySerializer(serializers.ModelSerializer):
+class MaterialReferenceSerializer(serializers.ModelSerializer):
     job_number = serializers.CharField(source='job.job_number', read_only=True)
     job_title = serializers.CharField(source='job.title', read_only=True)
+    price_range = serializers.ReadOnlyField()
     
     class Meta:
-        model = MaterialDelivery
+        model = MaterialReference
         fields = [
             'id', 'job', 'job_number', 'job_title', 'item_name',
-            'quantity', 'supplier', 'tracking_number', 'status',
-            'ordered_date', 'expected_delivery', 'actual_delivery',
-            'delivery_photo', 'delivery_notes', 'received_by',
-            'created_at', 'updated_at'
+            'quantity', 'supplier', 'supplier_logo', 'sku',
+            'price_low', 'price_high', 'price_range', 'purchase_url',
+            'description', 'created_at', 'updated_at'
         ]
-        read_only_fields = ['ordered_date']
 
 
 # ==================== Enhanced Investor Serializers ====================
@@ -645,3 +647,144 @@ class SupportTicketSerializer(serializers.ModelSerializer):
                 'created_at': latest.created_at
             }
         return None
+
+
+# ==================== Angi Integration Serializers ====================
+
+class AngiConnectionSerializer(serializers.ModelSerializer):
+    user_email = serializers.EmailField(source='user.email', read_only=True)
+    workspace_name = serializers.CharField(source='workspace.name', read_only=True)
+    is_token_expired = serializers.ReadOnlyField()
+    
+    class Meta:
+        model = AngiConnection
+        fields = [
+            'id', 'user', 'user_email', 'workspace', 'workspace_name',
+            'angi_account_id', 'is_active', 'is_token_expired',
+            'last_sync', 'created_at', 'updated_at'
+        ]
+        read_only_fields = ['user', 'workspace', 'access_token', 'refresh_token']
+
+
+class LeadActivitySerializer(serializers.ModelSerializer):
+    performed_by_email = serializers.EmailField(source='performed_by.email', read_only=True)
+    
+    class Meta:
+        model = LeadActivity
+        fields = [
+            'id', 'lead', 'activity_type', 'description',
+            'performed_by', 'performed_by_email', 'metadata', 'created_at'
+        ]
+        read_only_fields = ['performed_by']
+
+
+class LeadSerializer(serializers.ModelSerializer):
+    workspace_name = serializers.CharField(source='workspace.name', read_only=True)
+    created_by_email = serializers.EmailField(source='created_by.email', read_only=True)
+    assigned_to_email = serializers.EmailField(source='assigned_to.email', read_only=True)
+    angi_account_id = serializers.CharField(source='angi_connection.angi_account_id', read_only=True)
+    converted_job_number = serializers.CharField(source='converted_job.job_number', read_only=True)
+    activities = LeadActivitySerializer(many=True, read_only=True)
+    activity_count = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = Lead
+        fields = [
+            'id', 'workspace', 'workspace_name', 'lead_number', 'source', 'status',
+            'customer_name', 'customer_phone', 'customer_email', 'service_type',
+            'location', 'description', 'angi_lead_id', 'angi_account_id',
+            'ai_contacted', 'ai_contact_preference', 'converted_job', 'converted_job_number',
+            'created_by', 'created_by_email', 'assigned_to', 'assigned_to_email',
+            'activities', 'activity_count', 'created_at', 'updated_at'
+        ]
+        read_only_fields = ['lead_number', 'workspace', 'created_by', 'converted_job']
+    
+    def get_activity_count(self, obj):
+        return obj.activities.count()
+
+
+# ==================== Price Intelligence Serializers ====================
+
+class PriceIntelligenceSerializer(serializers.ModelSerializer):
+    price_change_percentage = serializers.ReadOnlyField()
+    supplier_display = serializers.CharField(source='get_supplier_display', read_only=True)
+    
+    class Meta:
+        model = PriceIntelligence
+        fields = [
+            'id', 'material_name', 'sku', 'supplier', 'supplier_display',
+            'category', 'current_price', 'previous_price', 'price_change_percentage',
+            'price_per_unit', 'brand', 'description', 'product_url', 'image_url',
+            'in_stock', 'stock_level', 'last_scraped', 'created_at'
+        ]
+        read_only_fields = ['last_scraped', 'created_at']
+
+
+# ==================== Insurance Verification Serializers ====================
+
+class InsuranceVerificationSerializer(serializers.ModelSerializer):
+    contractor_email = serializers.EmailField(source='contractor.user.email', read_only=True)
+    contractor_company = serializers.CharField(source='contractor.company_name', read_only=True)
+    verified_by_email = serializers.EmailField(source='verified_by.email', read_only=True)
+    is_expiring_soon = serializers.ReadOnlyField()
+    is_expired = serializers.ReadOnlyField()
+    
+    class Meta:
+        model = InsuranceVerification
+        fields = [
+            'id', 'contractor', 'contractor_email', 'contractor_company',
+            'insurance_company', 'policy_number', 'coverage_amount',
+            'effective_date', 'expiry_date', 'status', 'apex_co_insured',
+            'document_path', 'document_parsed_data', 'last_verified',
+            'verified_by', 'verified_by_email', 'verification_notes',
+            'auto_flagged', 'flag_reason', 'is_expiring_soon', 'is_expired',
+            'created_at', 'updated_at'
+        ]
+        read_only_fields = ['verified_by', 'last_verified', 'auto_flagged', 'flag_reason']
+
+
+# ==================== AI Voice Agent Serializers ====================
+
+class AIConversationSerializer(serializers.ModelSerializer):
+    lead_number = serializers.CharField(source='lead.lead_number', read_only=True)
+    customer_name = serializers.CharField(source='lead.customer_name', read_only=True)
+    
+    class Meta:
+        model = AIConversation
+        fields = [
+            'id', 'lead', 'lead_number', 'customer_name', 'conversation_type',
+            'status', 'phone_number', 'preferred_method', 'conversation_transcript',
+            'ai_responses', 'customer_responses', 'appointment_scheduled',
+            'scheduled_datetime', 'customer_qualified', 'qualification_score',
+            'call_sid', 'recording_url', 'duration_seconds',
+            'created_at', 'completed_at'
+        ]
+        read_only_fields = ['lead', 'call_sid', 'recording_url', 'duration_seconds']
+
+
+class TwilioIntegrationSerializer(serializers.ModelSerializer):
+    workspace_name = serializers.CharField(source='workspace.name', read_only=True)
+    
+    class Meta:
+        model = TwilioIntegration
+        fields = [
+            'id', 'workspace', 'workspace_name', 'phone_number',
+            'sms_enabled', 'voice_enabled', 'recording_enabled',
+            'sms_webhook_url', 'voice_webhook_url', 'created_at', 'updated_at'
+        ]
+        read_only_fields = ['workspace', 'account_sid', 'auth_token']  # Hide sensitive data
+
+
+class CommunicationLogSerializer(serializers.ModelSerializer):
+    lead_number = serializers.CharField(source='lead.lead_number', read_only=True)
+    customer_name = serializers.CharField(source='lead.customer_name', read_only=True)
+    
+    class Meta:
+        model = CommunicationLog
+        fields = [
+            'id', 'workspace', 'lead', 'lead_number', 'customer_name',
+            'ai_conversation', 'message_type', 'status', 'from_number',
+            'to_number', 'message_body', 'twilio_sid', 'recording_url',
+            'duration_seconds', 'cost', 'error_message', 'created_at'
+        ]
+        read_only_fields = ['workspace', 'twilio_sid', 'cost']
