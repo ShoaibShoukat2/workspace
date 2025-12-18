@@ -151,7 +151,7 @@ from .angi_views import (
     # Lead Management
     LeadListCreateView, LeadDetailView, LeadActivitiesView, ConvertLeadToJobView,
     # Lead Scraping
-    SyncAngiLeadsView, LeadStatisticsView
+    SyncAngiLeadsView, BulkImportAngiLeadsView, ManualLeadCreateView, LeadStatisticsView
 )
 
 from .price_intelligence_views import (
@@ -567,6 +567,8 @@ urlpatterns = [
     
     # Angi Lead Scraping
     path('angi/sync-leads/', SyncAngiLeadsView.as_view(), name='sync-angi-leads'),
+    path('angi/bulk-import/', BulkImportAngiLeadsView.as_view(), name='bulk-import-angi-leads'),
+    path('leads/create-manual/', ManualLeadCreateView.as_view(), name='manual-lead-create'),
     path('leads/statistics/', LeadStatisticsView.as_view(), name='lead-statistics'),
     
     # ==================== Price Intelligence System ====================
