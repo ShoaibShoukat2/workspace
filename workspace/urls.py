@@ -181,9 +181,105 @@ from .ai_voice_views import (
     TwilioIntegrationView, CommunicationLogView, AIPerformanceAnalyticsView
 )
 
+from .contractor_job_views import (
+    # Contractor Job Management
+    ContractorJobListView, ContractorJobDetailView,
+    # Job Evaluation
+    JobPhotoUploadView, JobEvaluationUpdateView, JobEvaluationSubmitView,
+    # Materials
+    JobMaterialSuggestionsView, JobMaterialVerificationView,
+    # Progress Updates
+    JobProgressPhotoUploadView, JobProgressNoteCreateView,
+    # Completion
+    JobChecklistView, JobChecklistUpdateView, JobCompleteWorkView,
+    # Customer Material Verification
+    ContractorVerifyCustomerMaterialsView
+)
+
+from .customer_job_views import (
+    # Customer Job Timeline
+    CustomerJobTimelineView,
+    # Pre-Start Checkpoint
+    CustomerPreStartCheckpointView, CustomerApprovePreStartView, CustomerRejectPreStartView,
+    # Mid-Project Checkpoint
+    CustomerMidProjectCheckpointView, CustomerApproveMidProjectView, CustomerRejectMidProjectView,
+    # Final Checkpoint
+    CustomerFinalCheckpointView, CustomerApproveFinalView, CustomerRejectFinalView,
+    # Customer Materials
+    CustomerJobMaterialsView, CustomerMaterialSourceView, CustomerMaterialPhotosView, CustomerMaterialLiabilityView
+)
+
+from .rag_pricing_views import (
+    RAGPricingServiceView, RAGPricingAnalyticsView
+)
+
+from .material_scraper_views import (
+    MaterialScraperServiceView, MaterialScraperStatusView, TriggerMaterialScrapeView
+)
+
+# Authentication views
+from rest_framework.authtoken.views import ObtainAuthToken
+from rest_framework.authtoken.models import Token
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticated
+from django.contrib.auth import get_user_model
+
+User = get_user_model()
+
+class CustomAuthToken(ObtainAuthToken):
+    """Custom authentication token view that returns user info"""
+    
+    def post(self, request, *args, **kwargs):
+        serializer = self.serializer_class(data=request.data,
+                                           context={'request': request})
+        serializer.is_valid(raise_exception=True)
+        user = serializer.validated_data['user']
+        token, created = Token.objects.get_or_create(user=user)
+        
+        # Determine user type
+        user_type = 'admin'  # default
+        if hasattr(user, 'contractor_profiles') and user.contractor_profiles.exists():
+            user_type = 'contractor'
+        elif hasattr(user, 'customer_profile'):
+            user_type = 'customer'
+        
+        return Response({
+            'token': token.key,
+            'user_id': user.pk,
+            'email': user.email,
+            'user_type': user_type
+        })
+
+class CurrentUserView(APIView):
+    """Get current user information"""
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request):
+        user = request.user
+        
+        # Determine user type
+        user_type = 'admin'  # default
+        if hasattr(user, 'contractor_profiles') and user.contractor_profiles.exists():
+            user_type = 'contractor'
+        elif hasattr(user, 'customer_profile'):
+            user_type = 'customer'
+        
+        return Response({
+            'user_id': user.pk,
+            'email': user.email,
+            'user_type': user_type,
+            'first_name': user.first_name,
+            'last_name': user.last_name
+        })
+
 app_name = 'workspace'
 
 urlpatterns = [
+    # ==================== Authentication ====================
+    path('auth/login/', CustomAuthToken.as_view(), name='auth-login'),
+    path('auth/user/', CurrentUserView.as_view(), name='current-user'),
+    
     # Workspace Management
     path('', WorkspaceListCreateView.as_view(), name='workspace-list'),
     path('<uuid:workspace_id>/', WorkspaceDetailView.as_view(), name='workspace-detail'),
@@ -519,4 +615,49 @@ urlpatterns = [
     path('admin/twilio/integration/', TwilioIntegrationView.as_view(), name='twilio-integration'),
     path('admin/communications/', CommunicationLogView.as_view(), name='communication-log'),
     path('admin/ai/analytics/', AIPerformanceAnalyticsView.as_view(), name='ai-performance-analytics'),
+    
+    # ==================== Job Workflow API Endpoints ====================
+    
+    # Contractor App - Job Management (B1-B13, B29)
+    path('contractor/jobs/', ContractorJobListView.as_view(), name='contractor-job-list'),  # B1
+    path('contractor/jobs/<int:job_id>/', ContractorJobDetailView.as_view(), name='contractor-job-detail'),  # B2
+    path('contractor/jobs/<int:job_id>/photos/upload/', JobPhotoUploadView.as_view(), name='job-photo-upload'),  # B3
+    path('contractor/jobs/<int:job_id>/evaluation/', JobEvaluationUpdateView.as_view(), name='job-evaluation-update'),  # B4
+    path('contractor/jobs/<int:job_id>/evaluation/submit/', JobEvaluationSubmitView.as_view(), name='job-evaluation-submit'),  # B5
+    path('contractor/jobs/<int:job_id>/materials/', JobMaterialSuggestionsView.as_view(), name='job-material-suggestions'),  # B6
+    path('contractor/jobs/<int:job_id>/materials/verify/', JobMaterialVerificationView.as_view(), name='job-material-verification'),  # B7
+    path('contractor/jobs/<int:job_id>/progress/photos/', JobProgressPhotoUploadView.as_view(), name='job-progress-photo-upload'),  # B8
+    path('contractor/jobs/<int:job_id>/progress/notes/', JobProgressNoteCreateView.as_view(), name='job-progress-note-create'),  # B9
+    path('contractor/jobs/<int:job_id>/checklist/', JobChecklistView.as_view(), name='job-checklist'),  # B10
+    path('contractor/jobs/<int:job_id>/checklist/update/', JobChecklistUpdateView.as_view(), name='job-checklist-update'),  # B11
+    # B12 - Mid-project checkpoint (handled by customer workflow)
+    path('contractor/jobs/<int:job_id>/complete/', JobCompleteWorkView.as_view(), name='job-complete-work'),  # B13
+    path('contractor/jobs/<int:job_id>/materials/verify-customer/', ContractorVerifyCustomerMaterialsView.as_view(), name='contractor-verify-customer-materials'),  # B29
+    
+    # Customer App - Job Experience (C1-C14)
+    path('customer/jobs/<int:job_id>/timeline/', CustomerJobTimelineView.as_view(), name='customer-job-timeline'),  # C1
+    path('customer/jobs/<int:job_id>/pre-start/', CustomerPreStartCheckpointView.as_view(), name='customer-pre-start-checkpoint'),  # C2
+    path('customer/jobs/<int:job_id>/pre-start/approve/', CustomerApprovePreStartView.as_view(), name='customer-approve-pre-start'),  # C3
+    path('customer/jobs/<int:job_id>/pre-start/reject/', CustomerRejectPreStartView.as_view(), name='customer-reject-pre-start'),  # C4
+    path('customer/jobs/<int:job_id>/mid-project/', CustomerMidProjectCheckpointView.as_view(), name='customer-mid-project-checkpoint'),  # C5
+    path('customer/jobs/<int:job_id>/mid-project/approve/', CustomerApproveMidProjectView.as_view(), name='customer-approve-mid-project'),  # C6
+    path('customer/jobs/<int:job_id>/mid-project/reject/', CustomerRejectMidProjectView.as_view(), name='customer-reject-mid-project'),  # C7
+    path('customer/jobs/<int:job_id>/final/', CustomerFinalCheckpointView.as_view(), name='customer-final-checkpoint'),  # C8
+    path('customer/jobs/<int:job_id>/final/approve/', CustomerApproveFinalView.as_view(), name='customer-approve-final'),  # C9
+    path('customer/jobs/<int:job_id>/final/reject/', CustomerRejectFinalView.as_view(), name='customer-reject-final'),  # C10
+    path('customer/jobs/<int:job_id>/materials/', CustomerJobMaterialsView.as_view(), name='customer-job-materials'),  # C11
+    path('customer/jobs/<int:job_id>/materials/source/', CustomerMaterialSourceView.as_view(), name='customer-material-source'),  # C12
+    path('customer/jobs/<int:job_id>/materials/photos/', CustomerMaterialPhotosView.as_view(), name='customer-material-photos'),  # C13
+    path('customer/jobs/<int:job_id>/materials/liability/', CustomerMaterialLiabilityView.as_view(), name='customer-material-liability'),  # C14
+    
+    # ==================== RAG Pricing & Material Scraper Services ====================
+    
+    # RAG Pricing Service (Endpoint 30)
+    path('services/rag-pricing/<int:job_id>/', RAGPricingServiceView.as_view(), name='rag-pricing-service'),  # 30
+    path('services/rag-pricing/analytics/', RAGPricingAnalyticsView.as_view(), name='rag-pricing-analytics'),
+    
+    # Material Scraper Service (Endpoint 31)
+    path('services/material-scraper/<int:job_id>/', MaterialScraperServiceView.as_view(), name='material-scraper-service'),  # 31
+    path('services/material-scraper/status/', MaterialScraperStatusView.as_view(), name='material-scraper-status'),
+    path('services/material-scraper/trigger/', TriggerMaterialScrapeView.as_view(), name='trigger-material-scrape'),
 ]

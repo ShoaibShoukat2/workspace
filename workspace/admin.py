@@ -123,10 +123,10 @@ class ChecklistStepInline(admin.TabularInline):
 
 @admin.register(JobChecklist)
 class JobChecklistAdmin(admin.ModelAdmin):
-    list_display = ['job', 'title', 'order', 'completion_percentage', 'created_at']
+    list_display = ['job', 'completion_percentage', 'created_at']
     list_filter = ['created_at']
-    search_fields = ['job__job_number', 'title']
-    inlines = [ChecklistStepInline]
+    search_fields = ['job__job_number']
+    readonly_fields = ['completion_percentage']
 
 
 @admin.register(ChecklistStep)

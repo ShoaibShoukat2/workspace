@@ -60,8 +60,13 @@ class Job(models.Model):
     """Jobs within a workspace"""
     
     class JobStatus(models.TextChoices):
-        PENDING = 'PENDING', 'Pending'
+        LEAD = 'LEAD', 'Lead'
+        EVALUATION_SCHEDULED = 'EVALUATION_SCHEDULED', 'Evaluation Scheduled'
+        EVALUATION_COMPLETED = 'EVALUATION_COMPLETED', 'Evaluation Completed'
+        AWAITING_PRE_START_APPROVAL = 'AWAITING_PRE_START_APPROVAL', 'Awaiting Pre-Start Approval'
         IN_PROGRESS = 'IN_PROGRESS', 'In Progress'
+        MID_CHECKPOINT_PENDING = 'MID_CHECKPOINT_PENDING', 'Mid Checkpoint Pending'
+        AWAITING_FINAL_APPROVAL = 'AWAITING_FINAL_APPROVAL', 'Awaiting Final Approval'
         COMPLETED = 'COMPLETED', 'Completed'
         CANCELLED = 'CANCELLED', 'Cancelled'
     
@@ -75,7 +80,7 @@ class Job(models.Model):
     job_number = models.CharField(max_length=50, unique=True, db_index=True)
     title = models.CharField(max_length=255)
     description = models.TextField()
-    status = models.CharField(max_length=20, choices=JobStatus.choices, default=JobStatus.PENDING)
+    status = models.CharField(max_length=30, choices=JobStatus.choices, default=JobStatus.LEAD)
     priority = models.CharField(max_length=20, choices=JobPriority.choices, default=JobPriority.MEDIUM)
     assigned_to = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='assigned_jobs')
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name='created_jobs')
@@ -92,6 +97,20 @@ class Job(models.Model):
     customer_phone = models.CharField(max_length=20, blank=True, null=True)
     customer_address = models.TextField(blank=True, null=True)
     notes = models.TextField(blank=True, null=True)
+    
+    # Branding fields
+    brand_name = models.CharField(max_length=255, default='Apex', blank=True)
+    powered_by = models.CharField(max_length=255, default='Apex', blank=True)
+    
+    # Evaluation scheduling
+    scheduled_evaluation_at = models.DateTimeField(null=True, blank=True)
+    expected_start = models.DateField(null=True, blank=True)
+    expected_end = models.DateField(null=True, blank=True)
+    
+    # Evaluation fee
+    evaluation_fee = models.DecimalField(max_digits=10, decimal_places=2, default=99.00)
+    evaluation_fee_credited = models.BooleanField(default=False)
+    
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
@@ -106,6 +125,191 @@ class Job(models.Model):
             models.Index(fields=['job_number']),
             models.Index(fields=['created_by', 'status']),
         ]
+
+
+# ==================== Job Evaluation & Checkpoint Models ====================
+
+class JobEvaluation(models.Model):
+    """Job evaluation data captured by contractor"""
+    
+    job = models.OneToOneField(Job, on_delete=models.CASCADE, related_name='evaluation')
+    
+    # Measurements
+    room_count = models.IntegerField(null=True, blank=True)
+    square_feet = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    measurements_data = models.JSONField(default=dict, blank=True)
+    
+    # Scope and requirements
+    scope = models.TextField(blank=True, null=True)
+    tools_required = models.JSONField(default=list, blank=True)
+    labor_required = models.IntegerField(null=True, blank=True)
+    estimated_hours = models.DecimalField(max_digits=8, decimal_places=2, null=True, blank=True)
+    safety_concerns = models.TextField(blank=True, null=True)
+    
+    # Status
+    is_submitted = models.BooleanField(default=False)
+    submitted_at = models.DateTimeField(null=True, blank=True)
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    def __str__(self):
+        return f"Evaluation for {self.job.job_number}"
+    
+    class Meta:
+        db_table = 'job_evaluations'
+
+
+class JobPhoto(models.Model):
+    """Photos for jobs at different stages"""
+    
+    class PhotoType(models.TextChoices):
+        BEFORE = 'BEFORE', 'Before'
+        EVALUATION = 'EVALUATION', 'Evaluation'
+        PROGRESS = 'PROGRESS', 'Progress'
+        AFTER = 'AFTER', 'After'
+        CUSTOMER_MATERIALS = 'CUSTOMER_MATERIALS', 'Customer Materials'
+    
+    job = models.ForeignKey(Job, on_delete=models.CASCADE, related_name='photos')
+    photo_type = models.CharField(max_length=20, choices=PhotoType.choices)
+    file_path = models.CharField(max_length=500)
+    file_url = models.URLField()
+    caption = models.CharField(max_length=255, blank=True, null=True)
+    uploaded_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    def __str__(self):
+        return f"{self.job.job_number} - {self.photo_type}"
+    
+    class Meta:
+        db_table = 'job_photos'
+        ordering = ['-created_at']
+
+
+class JobQuote(models.Model):
+    """AI-generated quotes for jobs"""
+    
+    job = models.ForeignKey(Job, on_delete=models.CASCADE, related_name='quotes')
+    quote_id = models.CharField(max_length=50, unique=True, db_index=True)
+    
+    # Pricing
+    gbb_total = models.DecimalField(max_digits=12, decimal_places=2)
+    evaluation_fee = models.DecimalField(max_digits=10, decimal_places=2, default=99.00)
+    total_after_credit = models.DecimalField(max_digits=12, decimal_places=2)
+    
+    # Line items
+    line_items = models.JSONField(default=list)
+    
+    # Generation metadata
+    generated_by_ai = models.BooleanField(default=True)
+    generation_context = models.JSONField(default=dict, blank=True)
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    def __str__(self):
+        return f"Quote {self.quote_id} for {self.job.job_number}"
+    
+    class Meta:
+        db_table = 'job_quotes'
+        ordering = ['-created_at']
+
+
+class JobCheckpoint(models.Model):
+    """Job checkpoints for customer approval workflow"""
+    
+    class CheckpointType(models.TextChoices):
+        PRE_START = 'PRE_START', 'Pre-Start'
+        MID_PROJECT = 'MID_PROJECT', 'Mid-Project'
+        FINAL = 'FINAL', 'Final'
+    
+    class CheckpointStatus(models.TextChoices):
+        PENDING = 'PENDING', 'Pending'
+        APPROVED = 'APPROVED', 'Approved'
+        REJECTED = 'REJECTED', 'Rejected'
+        ISSUE = 'ISSUE', 'Issue'
+    
+    job = models.ForeignKey(Job, on_delete=models.CASCADE, related_name='checkpoints')
+    checkpoint_type = models.CharField(max_length=20, choices=CheckpointType.choices)
+    status = models.CharField(max_length=20, choices=CheckpointStatus.choices, default=CheckpointStatus.PENDING)
+    
+    # Content
+    scope_summary = models.TextField(blank=True, null=True)
+    progress_note = models.TextField(blank=True, null=True)
+    
+    # Customer feedback
+    customer_note = models.TextField(blank=True, null=True)
+    rejection_reason = models.TextField(blank=True, null=True)
+    customer_rating = models.IntegerField(null=True, blank=True)
+    customer_review = models.TextField(blank=True, null=True)
+    
+    # Timestamps
+    created_at = models.DateTimeField(auto_now_add=True)
+    approved_at = models.DateTimeField(null=True, blank=True)
+    rejected_at = models.DateTimeField(null=True, blank=True)
+    
+    def __str__(self):
+        return f"{self.job.job_number} - {self.checkpoint_type} - {self.status}"
+    
+    class Meta:
+        db_table = 'job_checkpoints'
+        unique_together = ['job', 'checkpoint_type']
+        ordering = ['-created_at']
+
+
+class JobProgressNote(models.Model):
+    """Progress notes added during job execution"""
+    
+    job = models.ForeignKey(Job, on_delete=models.CASCADE, related_name='progress_notes')
+    note = models.TextField()
+    added_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True)
+    checkpoint = models.ForeignKey(JobCheckpoint, on_delete=models.SET_NULL, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    def __str__(self):
+        return f"{self.job.job_number} - Progress Note"
+    
+    class Meta:
+        db_table = 'job_progress_notes'
+        ordering = ['-created_at']
+
+
+
+
+
+class MaterialSuggestion(models.Model):
+    """AI-suggested materials for jobs"""
+    
+    job = models.ForeignKey(Job, on_delete=models.CASCADE, related_name='material_suggestions')
+    
+    # Material details
+    item_name = models.CharField(max_length=255)
+    sku = models.CharField(max_length=100, blank=True, null=True)
+    vendor = models.CharField(max_length=100)
+    vendor_logo_url = models.URLField(blank=True, null=True)
+    price_range = models.CharField(max_length=50)  # "$35-$45 / gallon"
+    suggested_qty = models.DecimalField(max_digits=10, decimal_places=2)
+    unit = models.CharField(max_length=50)
+    product_url = models.URLField()
+    
+    # Contractor verification
+    contractor_confirmed_qty = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    contractor_status = models.CharField(max_length=20, default='pending')  # confirmed, removed, edited
+    
+    # Customer material handling
+    customer_material_source = models.CharField(max_length=20, default='links')  # links, customer_supplied
+    customer_liability_accepted = models.BooleanField(default=False)
+    contractor_verified_customer_materials = models.BooleanField(default=False)
+    contractor_verification_note = models.TextField(blank=True, null=True)
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    def __str__(self):
+        return f"{self.job.job_number} - {self.item_name}"
+    
+    class Meta:
+        db_table = 'material_suggestions'
+        ordering = ['item_name']
 
 
 class JobAttachment(models.Model):
@@ -522,31 +726,32 @@ class JobAssignment(models.Model):
 
 
 class JobChecklist(models.Model):
-    """Checklist template for jobs"""
+    """Job completion checklist"""
     
-    job = models.ForeignKey(Job, on_delete=models.CASCADE, related_name='checklists')
-    title = models.CharField(max_length=255)
-    description = models.TextField(blank=True, null=True)
-    order = models.IntegerField(default=0)
-    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True)
+    job = models.OneToOneField(Job, on_delete=models.CASCADE, related_name='checklist')
+    items = models.JSONField(default=list)  # [{"id": "c1", "label": "All walls painted", "done": false}]
+    completion_percentage = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
-    def __str__(self):
-        return f"{self.job.job_number} - {self.title}"
-    
-    @property
-    def completion_percentage(self):
+    def calculate_completion(self):
         """Calculate completion percentage"""
-        total_steps = self.steps.count()
-        if total_steps == 0:
+        if not self.items:
             return 0
-        completed_steps = self.steps.filter(is_completed=True).count()
-        return (completed_steps / total_steps) * 100
+        
+        total_items = len(self.items)
+        completed_items = sum(1 for item in self.items if item.get('done', False))
+        
+        self.completion_percentage = (completed_items / total_items) * 100 if total_items > 0 else 0
+        self.save(update_fields=['completion_percentage'])
+        return self.completion_percentage
+    
+    def __str__(self):
+        return f"Checklist for {self.job.job_number}"
     
     class Meta:
         db_table = 'job_checklists'
-        ordering = ['order', 'created_at']
 
 
 class ChecklistStep(models.Model):

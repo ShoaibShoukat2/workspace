@@ -7,6 +7,8 @@ from .models import (
     ChecklistStep, StepMedia, JobCompletion, JobNotification,
     ContractorWallet, WalletTransaction, PayoutRequest, JobPayoutEligibility,
     Dispute, DisputeMessage, DisputeAttachment,
+    # Job workflow models
+    JobEvaluation, JobPhoto, JobQuote, JobCheckpoint, JobProgressNote, MaterialSuggestion,
     # New models
     CustomerProfile, ContractorLocation, JobTracking, CustomerNotification,
     MaterialReference, InvestorProfile, PropertyInvestment, InvestorPayout,
@@ -322,28 +324,7 @@ class ChecklistStepSerializer(serializers.ModelSerializer):
         return obj.media.count()
 
 
-class JobChecklistSerializer(serializers.ModelSerializer):
-    steps = ChecklistStepSerializer(many=True, read_only=True)
-    completion_percentage = serializers.ReadOnlyField()
-    total_steps = serializers.SerializerMethodField()
-    completed_steps = serializers.SerializerMethodField()
-    created_by_email = serializers.EmailField(source='created_by.email', read_only=True)
-    
-    class Meta:
-        model = JobChecklist
-        fields = [
-            'id', 'job', 'title', 'description', 'order',
-            'created_by', 'created_by_email', 'completion_percentage',
-            'total_steps', 'completed_steps', 'steps',
-            'created_at', 'updated_at'
-        ]
-        read_only_fields = ['created_by']
-    
-    def get_total_steps(self, obj):
-        return obj.steps.count()
-    
-    def get_completed_steps(self, obj):
-        return obj.steps.filter(is_completed=True).count()
+
 
 
 class JobCompletionSerializer(serializers.ModelSerializer):
@@ -384,7 +365,6 @@ class ContractorJobDetailSerializer(serializers.ModelSerializer):
     workspace_name = serializers.CharField(source='workspace.name', read_only=True)
     created_by_email = serializers.EmailField(source='created_by.email', read_only=True)
     assignment = serializers.SerializerMethodField()
-    checklists = JobChecklistSerializer(many=True, read_only=True)
     completion = JobCompletionSerializer(read_only=True)
     attachments = JobAttachmentSerializer(many=True, read_only=True)
     
@@ -395,7 +375,7 @@ class ContractorJobDetailSerializer(serializers.ModelSerializer):
             'description', 'status', 'priority', 'created_by', 'created_by_email',
             'estimated_hours', 'estimated_cost', 'start_date', 'due_date',
             'location', 'customer_name', 'customer_email', 'customer_phone',
-            'customer_address', 'notes', 'assignment', 'checklists',
+            'customer_address', 'notes', 'assignment',
             'completion', 'attachments', 'created_at', 'updated_at'
         ]
     
@@ -741,6 +721,184 @@ class InsuranceVerificationSerializer(serializers.ModelSerializer):
             'created_at', 'updated_at'
         ]
         read_only_fields = ['verified_by', 'last_verified', 'auto_flagged', 'flag_reason']
+
+
+# ==================== Job Workflow Serializers ====================
+
+class JobEvaluationSerializer(serializers.ModelSerializer):
+    job_number = serializers.CharField(source='job.job_number', read_only=True)
+    
+    class Meta:
+        model = JobEvaluation
+        fields = [
+            'id', 'job', 'job_number', 'room_count', 'square_feet',
+            'measurements_data', 'scope', 'tools_required', 'labor_required',
+            'estimated_hours', 'safety_concerns', 'is_submitted', 'submitted_at',
+            'created_at', 'updated_at'
+        ]
+        read_only_fields = ['job', 'submitted_at']
+
+
+class JobPhotoSerializer(serializers.ModelSerializer):
+    job_number = serializers.CharField(source='job.job_number', read_only=True)
+    uploaded_by_email = serializers.EmailField(source='uploaded_by.email', read_only=True)
+    
+    class Meta:
+        model = JobPhoto
+        fields = [
+            'id', 'job', 'job_number', 'photo_type', 'file_path', 'file_url',
+            'caption', 'uploaded_by', 'uploaded_by_email', 'created_at'
+        ]
+        read_only_fields = ['uploaded_by']
+
+
+class JobQuoteSerializer(serializers.ModelSerializer):
+    job_number = serializers.CharField(source='job.job_number', read_only=True)
+    
+    class Meta:
+        model = JobQuote
+        fields = [
+            'id', 'job', 'job_number', 'quote_id', 'gbb_total',
+            'evaluation_fee', 'total_after_credit', 'line_items',
+            'generated_by_ai', 'generation_context', 'created_at'
+        ]
+        read_only_fields = ['job', 'quote_id', 'generated_by_ai']
+
+
+class JobCheckpointSerializer(serializers.ModelSerializer):
+    job_number = serializers.CharField(source='job.job_number', read_only=True)
+    
+    class Meta:
+        model = JobCheckpoint
+        fields = [
+            'id', 'job', 'job_number', 'checkpoint_type', 'status',
+            'scope_summary', 'progress_note', 'customer_note', 'rejection_reason',
+            'customer_rating', 'customer_review', 'created_at', 'approved_at', 'rejected_at'
+        ]
+        read_only_fields = ['job', 'approved_at', 'rejected_at']
+
+
+class JobProgressNoteSerializer(serializers.ModelSerializer):
+    job_number = serializers.CharField(source='job.job_number', read_only=True)
+    added_by_email = serializers.EmailField(source='added_by.email', read_only=True)
+    checkpoint_type = serializers.CharField(source='checkpoint.checkpoint_type', read_only=True)
+    
+    class Meta:
+        model = JobProgressNote
+        fields = [
+            'id', 'job', 'job_number', 'note', 'added_by', 'added_by_email',
+            'checkpoint', 'checkpoint_type', 'created_at'
+        ]
+        read_only_fields = ['added_by']
+
+
+class JobChecklistSerializer(serializers.ModelSerializer):
+    job_number = serializers.CharField(source='job.job_number', read_only=True)
+    
+    class Meta:
+        model = JobChecklist
+        fields = [
+            'id', 'job', 'job_number', 'items', 'completion_percentage',
+            'created_at', 'updated_at'
+        ]
+        read_only_fields = ['job', 'completion_percentage']
+
+
+class MaterialSuggestionSerializer(serializers.ModelSerializer):
+    job_number = serializers.CharField(source='job.job_number', read_only=True)
+    
+    class Meta:
+        model = MaterialSuggestion
+        fields = [
+            'id', 'job', 'job_number', 'item_name', 'sku', 'vendor',
+            'vendor_logo_url', 'price_range', 'suggested_qty', 'unit', 'product_url',
+            'contractor_confirmed_qty', 'contractor_status', 'customer_material_source',
+            'customer_liability_accepted', 'contractor_verified_customer_materials',
+            'contractor_verification_note', 'created_at', 'updated_at'
+        ]
+        read_only_fields = ['job']
+
+
+class ContractorJobSerializer(serializers.ModelSerializer):
+    """Serializer for contractor job list and detail views"""
+    workspace_name = serializers.CharField(source='workspace.name', read_only=True)
+    customer_info = serializers.SerializerMethodField()
+    evaluation_status = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = Job
+        fields = [
+            'id', 'workspace', 'workspace_name', 'job_number', 'title',
+            'description', 'status', 'priority', 'customer_info',
+            'location', 'customer_address', 'evaluation_status',
+            'scheduled_evaluation_at', 'expected_start', 'expected_end',
+            'evaluation_fee', 'evaluation_fee_credited', 'brand_name', 'powered_by',
+            'created_at', 'updated_at'
+        ]
+    
+    def get_customer_info(self, obj):
+        return {
+            'name': obj.customer_name,
+            'email': obj.customer_email,
+            'phone': obj.customer_phone,
+            'address': obj.customer_address
+        }
+    
+    def get_evaluation_status(self, obj):
+        try:
+            evaluation = obj.evaluation
+            return {
+                'exists': True,
+                'submitted': evaluation.is_submitted,
+                'submitted_at': evaluation.submitted_at
+            }
+        except JobEvaluation.DoesNotExist:
+            return {
+                'exists': False,
+                'submitted': False,
+                'submitted_at': None
+            }
+
+
+class CustomerJobSerializer(serializers.ModelSerializer):
+    """Serializer for customer job views"""
+    contractor_info = serializers.SerializerMethodField()
+    tracking_status = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = Job
+        fields = [
+            'id', 'job_number', 'title', 'description', 'status',
+            'contractor_info', 'tracking_status', 'customer_address',
+            'scheduled_evaluation_at', 'expected_start', 'expected_end',
+            'brand_name', 'powered_by', 'created_at', 'updated_at'
+        ]
+    
+    def get_contractor_info(self, obj):
+        if obj.assigned_to:
+            try:
+                contractor = obj.assigned_to.contractor_profiles.first()
+                return {
+                    'name': obj.assigned_to.get_full_name() or obj.assigned_to.username,
+                    'email': obj.assigned_to.email,
+                    'company': contractor.company_name if contractor else None,
+                    'phone': contractor.phone if contractor else None
+                }
+            except:
+                return None
+        return None
+    
+    def get_tracking_status(self, obj):
+        try:
+            tracking = obj.tracking
+            return {
+                'status': tracking.status,
+                'estimated_arrival': tracking.estimated_arrival,
+                'actual_arrival': tracking.actual_arrival,
+                'last_update': tracking.updated_at
+            }
+        except JobTracking.DoesNotExist:
+            return None
 
 
 # ==================== AI Voice Agent Serializers ====================
