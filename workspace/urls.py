@@ -33,7 +33,14 @@ from .fm_views import (
     # Customer Signature
     CustomerSignEstimateView, GetEstimateForSigningView,
     # Estimate Actions
-    SendEstimateView, RecalculateEstimateView
+    SendEstimateView, RecalculateEstimateView,
+    # New FM Site Visit APIs
+    FMSiteVisitCreateView, FMSiteVisitUpdateView, FMSiteVisitCompleteView,
+    FMSiteVisitPhotoUploadView, FMJobVisitDetailView,
+    # AI Material Generation
+    AIGenerateMaterialsView, FMVerifyMaterialsView,
+    # Change Order Management
+    FMCreateChangeOrderView, FMChangeOrderListView
 )
 
 from .contractor_views import (
@@ -122,7 +129,11 @@ from .customer_views import (
     # Customer Profile
     CustomerProfileView, CustomerPreferencesView,
     # Issue Reporting
-    ReportIssueView
+    ReportIssueView,
+    # New APIs
+    GenerateCustomerCredentialsView, ValidateQuoteTokenView, ApproveQuoteView,
+    MaterialDeliveryConfirmationView, MaterialDeliveryPhotosUploadView,
+    JobDetailByTokenView, CustomerTrackingByTokenView
 )
 
 from .support_views import (
@@ -215,6 +226,23 @@ from .rag_pricing_views import (
 
 from .material_scraper_views import (
     MaterialScraperServiceView, MaterialScraperStatusView, TriggerMaterialScrapeView
+)
+
+from .admin_views import (
+    # Admin Dashboard Overview
+    AdminDashboardOverviewView,
+    # Admin Job Management
+    AdminJobListView, AdminJobDetailView,
+    # Admin Lead Management
+    AdminLeadListView, AdminLeadDetailView, AdminLeadCreateView, AdminLeadStatsView,
+    # Admin Meeting Management
+    AdminMeetingListView,
+    # Admin Investor Accounting
+    AdminInvestorAccountingView,
+    # Admin Ledger Management
+    AdminLedgerView,
+    # Enhanced Compliance Management
+    AdminComplianceOverviewView, AdminContractorComplianceActionView
 )
 
 # Authentication views
@@ -348,6 +376,23 @@ urlpatterns = [
     # Estimate Actions
     path('fm/estimates/<int:estimate_id>/send/', SendEstimateView.as_view(), name='estimate-send'),
     path('fm/estimates/<int:estimate_id>/recalculate/', RecalculateEstimateView.as_view(), name='estimate-recalculate'),
+    
+    # ==================== FM Site Visit Management ====================
+    
+    # Site Visit Workflow
+    path('fm/jobs/<int:job_id>/visit/', FMJobVisitDetailView.as_view(), name='fm-job-visit-detail'),
+    path('fm/jobs/<int:job_id>/visit/start/', FMSiteVisitCreateView.as_view(), name='fm-site-visit-create'),
+    path('fm/jobs/<int:job_id>/visit/update/', FMSiteVisitUpdateView.as_view(), name='fm-site-visit-update'),
+    path('fm/jobs/<int:job_id>/visit/complete/', FMSiteVisitCompleteView.as_view(), name='fm-site-visit-complete'),
+    path('fm/jobs/<int:job_id>/visit/photos/', FMSiteVisitPhotoUploadView.as_view(), name='fm-site-visit-photo-upload'),
+    
+    # AI Material Generation
+    path('fm/jobs/<int:job_id>/materials/generate/', AIGenerateMaterialsView.as_view(), name='ai-generate-materials'),
+    path('fm/jobs/<int:job_id>/materials/verify/', FMVerifyMaterialsView.as_view(), name='fm-verify-materials'),
+    
+    # Change Order Management
+    path('fm/jobs/<int:job_id>/change-order/', FMCreateChangeOrderView.as_view(), name='fm-create-change-order'),
+    path('fm/change-orders/', FMChangeOrderListView.as_view(), name='fm-change-order-list'),
     
     # Customer Signature (Public)
     path('public/estimates/<str:estimate_number>/', GetEstimateForSigningView.as_view(), name='estimate-public-view'),
@@ -519,6 +564,23 @@ urlpatterns = [
     # Issue Reporting
     path('customer/jobs/<int:job_id>/report-issue/', ReportIssueView.as_view(), name='report-issue'),
     
+    # ==================== Customer Credentials & Quote Approval ====================
+    
+    # Temporary Credentials Generation (Public)
+    path('public/generate-credentials/', GenerateCustomerCredentialsView.as_view(), name='generate-customer-credentials'),
+    path('public/validate-token/<str:token>/', ValidateQuoteTokenView.as_view(), name='validate-quote-token'),
+    
+    # Quote Approval (Public)
+    path('public/quote/<str:token>/approve/', ApproveQuoteView.as_view(), name='approve-quote'),
+    
+    # Material Delivery Confirmation (Legacy Support)
+    path('customer/jobs/<int:job_id>/material-delivery/', MaterialDeliveryConfirmationView.as_view(), name='material-delivery-confirmation'),
+    path('customer/jobs/<int:job_id>/material-delivery/photos/', MaterialDeliveryPhotosUploadView.as_view(), name='material-delivery-photos'),
+    
+    # Magic Token Based Access (Public)
+    path('public/job/<str:token>/', JobDetailByTokenView.as_view(), name='job-detail-by-token'),
+    path('public/job/<str:token>/tracking/', CustomerTrackingByTokenView.as_view(), name='customer-tracking-by-token'),
+    
     # ==================== Support System ====================
     
     # Support Tickets
@@ -662,4 +724,32 @@ urlpatterns = [
     path('services/material-scraper/<int:job_id>/', MaterialScraperServiceView.as_view(), name='material-scraper-service'),  # 31
     path('services/material-scraper/status/', MaterialScraperStatusView.as_view(), name='material-scraper-status'),
     path('services/material-scraper/trigger/', TriggerMaterialScrapeView.as_view(), name='trigger-material-scrape'),
+    
+    # ==================== Admin Dashboard & Management ====================
+    
+    # Admin Dashboard Overview
+    path('admin/dashboard/overview/', AdminDashboardOverviewView.as_view(), name='admin-dashboard-overview'),
+    
+    # Admin Job Management
+    path('admin/jobs/', AdminJobListView.as_view(), name='admin-job-list'),
+    path('admin/jobs/<int:pk>/', AdminJobDetailView.as_view(), name='admin-job-detail'),
+    
+    # Admin Lead Management
+    path('admin/leads/', AdminLeadListView.as_view(), name='admin-lead-list'),
+    path('admin/leads/<int:pk>/', AdminLeadDetailView.as_view(), name='admin-lead-detail'),
+    path('admin/leads/create/', AdminLeadCreateView.as_view(), name='admin-lead-create'),
+    path('admin/leads/stats/', AdminLeadStatsView.as_view(), name='admin-lead-stats'),
+    
+    # Admin Meeting Management
+    path('admin/meetings/', AdminMeetingListView.as_view(), name='admin-meeting-list'),
+    
+    # Admin Investor Accounting
+    path('admin/investor-accounting/', AdminInvestorAccountingView.as_view(), name='admin-investor-accounting'),
+    
+    # Admin Ledger Management
+    path('admin/ledger/', AdminLedgerView.as_view(), name='admin-ledger'),
+    
+    # Enhanced Admin Compliance Management
+    path('admin/compliance/overview/', AdminComplianceOverviewView.as_view(), name='admin-compliance-overview'),
+    path('admin/contractors/<int:contractor_id>/compliance-action/', AdminContractorComplianceActionView.as_view(), name='admin-contractor-compliance-action'),
 ]

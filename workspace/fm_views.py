@@ -416,3 +416,451 @@ class RecalculateEstimateView(APIView):
             'tax_amount': estimate.tax_amount,
             'total_amount': estimate.total_amount
         })
+
+
+# ==================== FM Site Visit Management ====================
+
+class FMSiteVisitCreateView(APIView):
+    """Create a new site visit for a job"""
+    permission_classes = [IsAuthenticated, IsAdminOrFM]
+    
+    def post(self, request, job_id):
+        job = get_object_or_404(Job, id=job_id, created_by=request.user)
+        
+        # Create site visit record
+        from .models import JobPhoto
+        
+        visit_data = {
+            'job_id': job.id,
+            'fm_user': request.user.id,
+            'status': 'IN_PROGRESS',
+            'started_at': timezone.now(),
+            'measurements': request.data.get('measurements', {}),
+            'scope_confirmed': request.data.get('scope_confirmed', False),
+            'tools_required': request.data.get('tools_required', []),
+            'labor_required': request.data.get('labor_required', 1),
+            'estimated_time': request.data.get('estimated_time', 0),
+            'safety_concerns': request.data.get('safety_concerns', ''),
+        }
+        
+        # Update job status
+        job.status = 'EVALUATION_IN_PROGRESS'
+        job.save()
+        
+        return Response({
+            'message': 'Site visit started successfully',
+            'job_id': job.id,
+            'visit_data': visit_data
+        })
+
+
+class FMSiteVisitUpdateView(APIView):
+    """Update site visit progress"""
+    permission_classes = [IsAuthenticated, IsAdminOrFM]
+    
+    def put(self, request, job_id):
+        job = get_object_or_404(Job, id=job_id, created_by=request.user)
+        
+        # Update job with visit data
+        update_fields = {}
+        
+        if 'measurements' in request.data:
+            update_fields['measurements'] = request.data['measurements']
+        
+        if 'scope_confirmed' in request.data:
+            update_fields['scope_confirmed'] = request.data['scope_confirmed']
+        
+        if 'tools_required' in request.data:
+            update_fields['tools_required'] = request.data['tools_required']
+        
+        if 'labor_required' in request.data:
+            update_fields['labor_required'] = request.data['labor_required']
+        
+        if 'estimated_time' in request.data:
+            update_fields['estimated_time'] = request.data['estimated_time']
+        
+        if 'safety_concerns' in request.data:
+            update_fields['safety_concerns'] = request.data['safety_concerns']
+        
+        # Update job fields
+        for field, value in update_fields.items():
+            setattr(job, field, value)
+        
+        job.save()
+        
+        return Response({
+            'message': 'Site visit updated successfully',
+            'job_id': job.id,
+            'updated_fields': list(update_fields.keys())
+        })
+
+
+class FMSiteVisitCompleteView(APIView):
+    """Complete site visit and move to next stage"""
+    permission_classes = [IsAuthenticated, IsAdminOrFM]
+    
+    def post(self, request, job_id):
+        job = get_object_or_404(Job, id=job_id, created_by=request.user)
+        
+        # Validate required fields
+        required_checks = [
+            ('measurements', 'Measurements are required'),
+            ('scope_confirmed', 'Scope must be confirmed'),
+            ('materials', 'Materials must be verified'),
+        ]
+        
+        for field, error_msg in required_checks:
+            if not getattr(job, field, None):
+                return Response({'error': error_msg}, 
+                              status=status.HTTP_400_BAD_REQUEST)
+        
+        # Update job status
+        job.status = 'EVALUATION_COMPLETED'
+        job.evaluation_completed_at = timezone.now()
+        job.save()
+        
+        return Response({
+            'message': 'Site visit completed successfully',
+            'job_id': job.id,
+            'status': job.status,
+            'next_step': 'quote_generation'
+        })
+
+
+class FMSiteVisitPhotoUploadView(APIView):
+    """Upload photos during site visit"""
+    permission_classes = [IsAuthenticated, IsAdminOrFM]
+    
+    def post(self, request, job_id):
+        job = get_object_or_404(Job, id=job_id, created_by=request.user)
+        
+        file = request.FILES.get('file')
+        photo_type = request.data.get('photo_type', 'BEFORE')  # BEFORE, PROGRESS, AFTER
+        caption = request.data.get('caption', '')
+        
+        if not file:
+            return Response({'error': 'File is required'}, 
+                          status=status.HTTP_400_BAD_REQUEST)
+        
+        # Create job photo
+        from .models import JobPhoto
+        photo = JobPhoto.objects.create(
+            job=job,
+            photo_type=photo_type,
+            file_path=f'jobs/{job.id}/site_visit/{file.name}',
+            file_url=f'/media/jobs/{job.id}/site_visit/{file.name}',
+            caption=caption,
+            uploaded_by=request.user
+        )
+        
+        return Response({
+            'photo_id': photo.id,
+            'url': photo.file_url,
+            'photo_type': photo_type,
+            'message': 'Photo uploaded successfully'
+        })
+
+
+# ==================== AI Material Generation ====================
+
+class AIGenerateMaterialsView(APIView):
+    """Generate AI material suggestions for a job"""
+    permission_classes = [IsAuthenticated, IsAdminOrFM]
+    
+    def post(self, request, job_id):
+        job = get_object_or_404(Job, id=job_id, created_by=request.user)
+        
+        # Mock AI material generation based on job details
+        # In a real implementation, this would call an AI service
+        
+        job_scope = request.data.get('scope', job.description or '')
+        trade = request.data.get('trade', job.title or 'general')
+        
+        # Generate mock materials based on trade
+        mock_materials = self._generate_mock_materials(trade.lower(), job_scope)
+        
+        # Save as material suggestions
+        from .models import MaterialReference
+        
+        # Clear existing AI suggestions
+        MaterialReference.objects.filter(job=job, status='AI_GENERATED').delete()
+        
+        created_materials = []
+        for material_data in mock_materials:
+            material = MaterialReference.objects.create(
+                job=job,
+                item_name=material_data['name'],
+                suggested_qty=material_data['quantity'],
+                unit=material_data.get('unit', 'each'),
+                vendor=material_data.get('supplier', 'Home Depot'),
+                price_range=material_data.get('price_range', '$10-20'),
+                product_url=material_data.get('product_url', ''),
+                status='AI_GENERATED',
+                created_by=request.user
+            )
+            created_materials.append({
+                'id': material.id,
+                'name': material.item_name,
+                'quantity': material.suggested_qty,
+                'supplier': material.vendor,
+                'price_range': material.price_range,
+                'status': material.status
+            })
+        
+        return Response({
+            'message': f'Generated {len(created_materials)} material suggestions',
+            'materials': created_materials,
+            'ai_analysis': f'Based on {trade} work scope: {job_scope[:100]}...'
+        })
+    
+    def _generate_mock_materials(self, trade, scope):
+        """Generate mock materials based on trade type"""
+        materials_db = {
+            'painting': [
+                {'name': 'Premium Paint (Eggshell)', 'quantity': 3, 'unit': 'gallon', 'supplier': 'Sherwin Williams', 'price_range': '$45-50'},
+                {'name': 'Roller Kit (9")', 'quantity': 2, 'unit': 'each', 'supplier': 'Home Depot', 'price_range': '$15-20'},
+                {'name': 'Painters Tape (Blue)', 'quantity': 4, 'unit': 'roll', 'supplier': '3M', 'price_range': '$5-8'},
+                {'name': 'Drop Cloths', 'quantity': 3, 'unit': 'each', 'supplier': 'Home Depot', 'price_range': '$8-12'},
+            ],
+            'plumbing': [
+                {'name': 'PVC Pipe (1/2")', 'quantity': 10, 'unit': 'feet', 'supplier': 'Home Depot', 'price_range': '$2-3'},
+                {'name': 'Pipe Fittings', 'quantity': 5, 'unit': 'each', 'supplier': 'Lowes', 'price_range': '$3-5'},
+                {'name': 'Plumber Putty', 'quantity': 1, 'unit': 'tube', 'supplier': 'Home Depot', 'price_range': '$8-10'},
+            ],
+            'electrical': [
+                {'name': 'Electrical Wire (12 AWG)', 'quantity': 50, 'unit': 'feet', 'supplier': 'Home Depot', 'price_range': '$1-2'},
+                {'name': 'Wire Nuts', 'quantity': 20, 'unit': 'each', 'supplier': 'Lowes', 'price_range': '$0.50-1'},
+                {'name': 'Electrical Outlet', 'quantity': 3, 'unit': 'each', 'supplier': 'Home Depot', 'price_range': '$5-8'},
+            ]
+        }
+        
+        return materials_db.get(trade, [
+            {'name': 'General Materials', 'quantity': 1, 'unit': 'lot', 'supplier': 'Home Depot', 'price_range': '$50-100'}
+        ])
+
+
+class FMVerifyMaterialsView(APIView):
+    """FM verifies and updates AI-generated materials"""
+    permission_classes = [IsAuthenticated, IsAdminOrFM]
+    
+    def post(self, request, job_id):
+        job = get_object_or_404(Job, id=job_id, created_by=request.user)
+        
+        materials_data = request.data.get('materials', [])
+        
+        if not materials_data:
+            return Response({'error': 'Materials data is required'}, 
+                          status=status.HTTP_400_BAD_REQUEST)
+        
+        # Clear existing materials
+        from .models import MaterialReference
+        MaterialReference.objects.filter(job=job).delete()
+        
+        # Create verified materials
+        verified_materials = []
+        for material_data in materials_data:
+            material = MaterialReference.objects.create(
+                job=job,
+                item_name=material_data['name'],
+                suggested_qty=material_data['quantity'],
+                unit=material_data.get('unit', 'each'),
+                vendor=material_data.get('supplier', 'Home Depot'),
+                price_range=material_data.get('price_range', '$10-20'),
+                product_url=material_data.get('product_url', ''),
+                status='FM_VERIFIED',
+                created_by=request.user
+            )
+            verified_materials.append({
+                'id': material.id,
+                'name': material.item_name,
+                'quantity': material.suggested_qty,
+                'supplier': material.vendor,
+                'price_range': material.price_range,
+                'status': material.status
+            })
+        
+        # Update job material status
+        job.material_status = 'FM_VERIFIED'
+        job.save()
+        
+        return Response({
+            'message': f'Verified {len(verified_materials)} materials',
+            'materials': verified_materials,
+            'job_status': job.material_status
+        })
+
+
+# ==================== Change Order Management ====================
+
+class FMCreateChangeOrderView(APIView):
+    """Create a change order for additional work"""
+    permission_classes = [IsAuthenticated, IsAdminOrFM]
+    
+    def post(self, request, job_id):
+        job = get_object_or_404(Job, id=job_id, created_by=request.user)
+        
+        reason = request.data.get('reason')
+        line_items = request.data.get('line_items', [])
+        
+        if not reason:
+            return Response({'error': 'Reason is required'}, 
+                          status=status.HTTP_400_BAD_REQUEST)
+        
+        if not line_items:
+            return Response({'error': 'At least one line item is required'}, 
+                          status=status.HTTP_400_BAD_REQUEST)
+        
+        # Calculate total
+        total_additional_cost = sum(
+            item.get('quantity', 0) * item.get('rate', 0) 
+            for item in line_items
+        )
+        
+        # Create dispute/change order record
+        from .models import Dispute
+        import uuid
+        
+        change_order_number = f"CO-{str(uuid.uuid4())[:8].upper()}"
+        
+        # Format line items for description
+        line_items_text = '\n'.join([
+            f"- {item['description']}: {item['quantity']} x ${item['rate']} = ${item['quantity'] * item['rate']}"
+            for item in line_items
+        ])
+        
+        description = f"""Change Order Request
+Reason: {reason}
+
+Additional Work:
+{line_items_text}
+
+Total Additional Cost: ${total_additional_cost:.2f}"""
+        
+        change_order = Dispute.objects.create(
+            dispute_number=change_order_number,
+            job=job,
+            raised_by=request.user,
+            category='CHANGE_ORDER',
+            title=f'Change Order - {job.job_number}',
+            description=description,
+            status='PENDING'
+        )
+        
+        return Response({
+            'message': 'Change order created successfully',
+            'change_order_number': change_order_number,
+            'total_additional_cost': total_additional_cost,
+            'status': 'pending_approval'
+        })
+
+
+class FMChangeOrderListView(APIView):
+    """List change orders created by FM"""
+    permission_classes = [IsAuthenticated, IsAdminOrFM]
+    
+    def get(self, request):
+        from .models import Dispute
+        
+        change_orders = Dispute.objects.filter(
+            raised_by=request.user,
+            category='CHANGE_ORDER'
+        ).order_by('-created_at')
+        
+        change_orders_data = []
+        for co in change_orders:
+            change_orders_data.append({
+                'id': co.id,
+                'change_order_number': co.dispute_number,
+                'job_id': co.job.id,
+                'job_address': co.job.customer_address,
+                'title': co.title,
+                'status': co.status,
+                'created_at': co.created_at,
+                'description': co.description[:200] + '...' if len(co.description) > 200 else co.description
+            })
+        
+        return Response({
+            'change_orders': change_orders_data,
+            'count': len(change_orders_data)
+        })
+
+
+# ==================== FM Job Visit Details ====================
+
+class FMJobVisitDetailView(APIView):
+    """Get detailed job information for site visit"""
+    permission_classes = [IsAuthenticated, IsAdminOrFM]
+    
+    def get(self, request, job_id):
+        job = get_object_or_404(Job, id=job_id, created_by=request.user)
+        
+        # Get job photos
+        from .models import JobPhoto, MaterialReference
+        
+        photos = JobPhoto.objects.filter(job=job)
+        materials = MaterialReference.objects.filter(job=job)
+        
+        # Get existing estimates
+        estimates = Estimate.objects.filter(job=job)
+        
+        job_data = {
+            'id': job.id,
+            'job_number': job.job_number,
+            'title': job.title,
+            'description': job.description,
+            'status': job.status,
+            'customer_name': job.customer_name,
+            'customer_email': job.customer_email,
+            'customer_address': job.customer_address,
+            'customer_phone': job.customer_phone,
+            'trade': job.title.split(' ')[0] if job.title else 'General',
+            'priority': job.priority,
+            'created_at': job.created_at,
+            'start_date': job.start_date,
+            'due_date': job.due_date,
+            
+            # Visit-specific data
+            'measurements': getattr(job, 'measurements', {}),
+            'scope_confirmed': getattr(job, 'scope_confirmed', False),
+            'tools_required': getattr(job, 'tools_required', []),
+            'labor_required': getattr(job, 'labor_required', 1),
+            'estimated_time': getattr(job, 'estimated_time', 0),
+            'safety_concerns': getattr(job, 'safety_concerns', ''),
+            'material_status': getattr(job, 'material_status', 'PENDING'),
+            
+            # Related data
+            'photos': [
+                {
+                    'id': photo.id,
+                    'url': photo.file_url,
+                    'photo_type': photo.photo_type,
+                    'caption': photo.caption,
+                    'uploaded_at': photo.uploaded_at
+                }
+                for photo in photos
+            ],
+            'materials': [
+                {
+                    'id': mat.id,
+                    'name': mat.item_name,
+                    'quantity': mat.suggested_qty,
+                    'unit': mat.unit,
+                    'supplier': mat.vendor,
+                    'price_range': mat.price_range,
+                    'status': mat.status
+                }
+                for mat in materials
+            ],
+            'estimates': [
+                {
+                    'id': est.id,
+                    'estimate_number': est.estimate_number,
+                    'total_amount': float(est.total_amount),
+                    'status': est.status,
+                    'created_at': est.created_at
+                }
+                for est in estimates
+            ]
+        }
+        
+        return Response(job_data)

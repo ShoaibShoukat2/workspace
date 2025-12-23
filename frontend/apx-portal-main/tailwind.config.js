@@ -1,0 +1,100 @@
+/** @type {import('tailwindcss').Config} */
+export default {
+    content: [
+        "./index.html",
+        "./src/**/*.{js,ts,jsx,tsx}",
+    ],
+    darkMode: 'class',
+    theme: {
+        extend: {
+            fontFamily: {
+                sans: ['Inter', 'system-ui', 'sans-serif'],
+            },
+            boxShadow: {
+                'glass': '0 8px 30px rgba(0, 0, 0, 0.12)',
+                'glass-dark': '0 8px 30px rgba(0, 0, 0, 0.3)',
+                'glass-hover': '0 20px 40px rgba(0, 0, 0, 0.2)',
+                'glass-hover-dark': '0 20px 40px rgba(88, 28, 135, 0.4)',
+                'island': '0 20px 50px rgba(88, 28, 135, 0.5)',
+                'island-dark': '0 20px 50px rgba(0, 0, 0, 0.8)',
+                'glow': '0 0 20px rgba(255, 255, 255, 0.5)',
+                'glow-hover': '0 0 15px rgba(255, 255, 255, 0.3)',
+            },
+            colors: {
+                primary: {
+                    50: '#faf5ff',
+                    100: '#f3e8ff',
+                    200: '#e9d5ff',
+                    300: '#d8b4fe',
+                    400: '#c084fc',
+                    500: '#a855f7',
+                    600: '#9333ea',
+                    700: '#7e22ce',
+                    800: '#6b21a8',
+                    900: '#581c87',
+                    950: '#3b0764',
+                },
+                secondary: {
+                    50: '#fdf4ff',
+                    100: '#fae8ff',
+                    200: '#f5d0fe',
+                    300: '#f0abfc',
+                    400: '#e879f9',
+                    500: '#d946ef',
+                    600: '#c026d3',
+                    700: '#a21caf',
+                    800: '#86198f',
+                    900: '#701a75',
+                    950: '#4a044e',
+                },
+                accent: {
+                    50: '#eff6ff',
+                    100: '#dbeafe',
+                    200: '#bfdbfe',
+                    300: '#93c5fd',
+                    400: '#60a5fa',
+                    500: '#3b82f6',
+                    600: '#2563eb',
+                    700: '#1d4ed8',
+                    800: '#1e40af',
+                    900: '#1e3a8a',
+                    950: '#172554',
+                },
+                success: '#10b981',
+                warning: '#f59e0b',
+                danger: '#ef4444',
+                info: '#06b6d4',
+            },
+            backgroundImage: {
+                'gradient-primary': 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                'gradient-secondary': 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
+                'gradient-accent': 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
+                'gradient-dark': 'linear-gradient(135deg, #2d1b69 0%, #1a0b3a 100%)',
+            },
+            backdropBlur: {
+                xs: '2px',
+            },
+            animation: {
+                'fade-in': 'fadeIn 0.3s ease-in-out',
+                'slide-in': 'slideIn 0.3s ease-out',
+                'scale-in': 'scaleIn 0.2s ease-out',
+                'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+            },
+            keyframes: {
+                fadeIn: {
+                    '0%': { opacity: '0' },
+                    '100%': { opacity: '1' },
+                },
+                slideIn: {
+                    '0%': { transform: 'translateY(10px)', opacity: '0' },
+                    '100%': { transform: 'translateY(0)', opacity: '1' },
+                },
+                scaleIn: {
+                    '0%': { transform: 'scale(0.95)', opacity: '0' },
+                    '100%': { transform: 'scale(1)', opacity: '1' },
+                },
+            },
+        },
+    },
+    plugins: [],
+}
