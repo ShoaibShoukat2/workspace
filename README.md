@@ -131,42 +131,703 @@ GOOGLE_MAPS_API_KEY=your-maps-key
 
 ## 📚 API Documentation
 
-### Authentication Endpoints
-
+### Base URL
 ```
-POST /api/v1/auth/register          # User registration
-POST /api/v1/auth/login             # Email/password login
-POST /api/v1/auth/refresh           # Refresh access token
-POST /api/v1/auth/magic-link/request # Request magic link
-POST /api/v1/auth/magic-link/verify  # Verify magic link
-POST /api/v1/auth/verify-email      # Verify email address
-POST /api/v1/auth/password-reset/request # Request password reset
-POST /api/v1/auth/password-reset/confirm # Confirm password reset
-GET  /api/v1/auth/me                # Get current user
-PATCH /api/v1/auth/profile          # Update profile
-POST /api/v1/auth/logout            # Logout
+http://localhost:8000/api/v1
 ```
 
-### Core Business Endpoints
-
+### Authentication
+All protected endpoints require a Bearer token in the Authorization header:
 ```
-# Workspaces
-GET    /api/v1/workspaces           # List workspaces
-POST   /api/v1/workspaces           # Create workspace
-GET    /api/v1/workspaces/{id}      # Get workspace
-PATCH  /api/v1/workspaces/{id}      # Update workspace
-
-# Jobs
-GET    /api/v1/jobs                 # List jobs
-POST   /api/v1/jobs                 # Create job
-GET    /api/v1/jobs/{id}            # Get job
-PATCH  /api/v1/jobs/{id}            # Update job
-
-# Contractors
-GET    /api/v1/contractors          # List contractors
-POST   /api/v1/contractors          # Create contractor
-GET    /api/v1/contractors/{id}     # Get contractor
+Authorization: Bearer <your-jwt-token>
 ```
+
+---
+
+## 🔐 Authentication Endpoints
+
+### Login
+```http
+POST /auth/login
+Content-Type: application/json
+
+{
+  "email": "admin@apex.inc",
+  "password": "password123"
+}
+```
+
+**Response:**
+```json
+{
+  "access_token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...",
+  "refresh_token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...",
+  "token_type": "bearer",
+  "user": {
+    "id": 1,
+    "email": "admin@apex.inc",
+    "full_name": "Admin User",
+    "role": "ADMIN"
+  },
+  "profile": {
+    "id": 1,
+    "email": "admin@apex.inc",
+    "full_name": "Admin User",
+    "user_role": "ADMIN",
+    "profileID": "PROF-000001",
+    "profile_id": "PROF-000001"
+  }
+}
+```
+
+### Get Current User
+```http
+GET /auth/me
+Authorization: Bearer <token>
+```
+
+**Response:**
+```json
+{
+  "id": 1,
+  "email": "admin@apex.inc",
+  "full_name": "Admin User",
+  "role": "ADMIN",
+  "is_active": true
+}
+```
+
+### Get All Profiles
+```http
+GET /profiles
+Authorization: Bearer <token>
+```
+
+**Response:**
+```json
+[
+  {
+    "id": 1,
+    "email": "admin@apex.inc",
+    "full_name": "Admin User",
+    "user_role": "ADMIN",
+    "profileID": "PROF-000001",
+    "profile_id": "PROF-000001"
+  },
+  {
+    "id": 2,
+    "email": "contractor@apex.inc",
+    "full_name": "John Contractor",
+    "user_role": "CONTRACTOR",
+    "profileID": "PROF-000002",
+    "profile_id": "PROF-000002"
+  }
+]
+```
+
+---
+
+## 👨‍💼 Admin Dashboard APIs
+
+### Get Admin Dashboard Overview
+```http
+GET /admin/dashboard
+Authorization: Bearer <admin-token>
+```
+
+**Response:**
+```json
+{
+  "total_jobs": 3,
+  "active_jobs": 2,
+  "completed_jobs": 1,
+  "total_contractors": 2,
+  "active_contractors": 2,
+  "pending_payouts": 1,
+  "pending_payouts_amount": 950.0,
+  "pending_disputes": 0,
+  "blocked_contractors": 0,
+  "revenue_data": [
+    {"month": "Jan", "value": 4000},
+    {"month": "Feb", "value": 3000},
+    {"month": "Mar", "value": 2000},
+    {"month": "Apr", "value": 2780},
+    {"month": "May", "value": 1890},
+    {"month": "Jun", "value": 2390},
+    {"month": "Jul", "value": 3490}
+  ],
+  "job_stats": [
+    {"name": "Open", "count": 1},
+    {"name": "In Progress", "count": 1},
+    {"name": "Completed", "count": 1},
+    {"name": "Paid", "count": 0}
+  ],
+  "recent_contractors": [
+    {
+      "id": "1",
+      "user_id": "2",
+      "full_name": "John Contractor",
+      "email": "contractor@apex.inc",
+      "phone": "555-0101",
+      "trade": "Painting",
+      "status": "ACTIVE",
+      "compliance_status": "active",
+      "created_at": "2024-01-01"
+    }
+  ],
+  "active_investors": []
+}
+```
+
+### Get All Jobs (Admin)
+```http
+GET /admin/jobs?status=Open
+Authorization: Bearer <admin-token>
+```
+
+**Response:**
+```json
+{
+  "jobs": [
+    {
+      "id": "101",
+      "job_number": "JOB-20241201-001",
+      "customer_name": "John Smith",
+      "property_address": "123 Main St",
+      "status": "InProgress",
+      "trade": "Painting",
+      "estimated_cost": "5000",
+      "actual_cost": "4800",
+      "assigned_contractor_id": "2",
+      "created_at": "2024-12-01"
+    }
+  ],
+  "total": 1
+}
+```
+
+### Get All Payouts (Admin)
+```http
+GET /admin/payouts?status=PENDING
+Authorization: Bearer <admin-token>
+```
+
+**Response:**
+```json
+{
+  "payouts": [
+    {
+      "id": "2",
+      "contractor_id": "1",
+      "amount": "950.00",
+      "status": "PENDING",
+      "job_id": "103",
+      "created_at": "2024-12-03",
+      "paid_date": null,
+      "contractor_name": "John Contractor",
+      "contractor_email": "contractor@apex.inc"
+    }
+  ],
+  "total": 1
+}
+```
+
+### Approve Payout
+```http
+POST /admin/payouts/2/approve
+Authorization: Bearer <admin-token>
+```
+
+**Response:**
+```json
+{
+  "message": "Payout approved successfully"
+}
+```
+
+### Reject Payout
+```http
+POST /admin/payouts/2/reject
+Authorization: Bearer <admin-token>
+Content-Type: application/json
+
+{
+  "reason": "Incomplete documentation"
+}
+```
+
+**Response:**
+```json
+{
+  "message": "Payout rejected successfully"
+}
+```
+
+### Get All Contractors (Admin)
+```http
+GET /admin/contractors
+Authorization: Bearer <admin-token>
+```
+
+**Response:**
+```json
+{
+  "contractors": [
+    {
+      "id": "1",
+      "user_id": "2",
+      "full_name": "John Contractor",
+      "email": "contractor@apex.inc",
+      "phone": "555-0101",
+      "trade": "Painting",
+      "status": "ACTIVE",
+      "compliance_status": "active",
+      "created_at": "2024-01-01"
+    }
+  ],
+  "total": 1
+}
+```
+
+### Get All Users (Admin)
+```http
+GET /admin/users
+Authorization: Bearer <admin-token>
+```
+
+**Response:**
+```json
+{
+  "users": [
+    {
+      "id": "1",
+      "email": "admin@apex.inc",
+      "password_hash": "$2b$12$hash1",
+      "full_name": "Admin User",
+      "role": "ADMIN",
+      "is_active": "True",
+      "created_at": "2024-01-01"
+    }
+  ],
+  "total": 5
+}
+```
+
+---
+
+## 🔨 Contractor Dashboard APIs
+
+### Get Contractor Dashboard Overview
+```http
+GET /contractors/dashboard/overview
+Authorization: Bearer <contractor-token>
+```
+
+**Response:**
+```json
+{
+  "stats": {
+    "active_jobs": 1,
+    "completed_jobs": 1,
+    "total_earnings": 1200.0,
+    "pending_payouts": 950.0
+  },
+  "recent_jobs": [
+    {
+      "id": "101",
+      "job_number": "JOB-20241201-001",
+      "customer_name": "John Smith",
+      "property_address": "123 Main St",
+      "status": "InProgress",
+      "trade": "Painting",
+      "estimated_cost": "5000",
+      "actual_cost": "4800",
+      "assigned_contractor_id": "2",
+      "created_at": "2024-12-01"
+    }
+  ],
+  "compliance_status": "active"
+}
+```
+
+### Get Available Jobs
+```http
+GET /contractors/jobs/available
+Authorization: Bearer <contractor-token>
+```
+
+**Response:**
+```json
+{
+  "jobs": [
+    {
+      "id": "102",
+      "job_number": "JOB-20241202-002",
+      "customer_name": "Jane Doe",
+      "property_address": "456 Oak Ave",
+      "status": "Open",
+      "trade": "Plumbing",
+      "estimated_cost": "3000",
+      "actual_cost": null,
+      "assigned_contractor_id": null,
+      "created_at": "2024-12-02"
+    }
+  ],
+  "total": 1
+}
+```
+
+### Get My Jobs
+```http
+GET /contractors/jobs/my-jobs
+Authorization: Bearer <contractor-token>
+```
+
+**Response:**
+```json
+{
+  "jobs": [
+    {
+      "id": "101",
+      "job_number": "JOB-20241201-001",
+      "customer_name": "John Smith",
+      "property_address": "123 Main St",
+      "status": "InProgress",
+      "trade": "Painting",
+      "estimated_cost": "5000",
+      "actual_cost": "4800",
+      "assigned_contractor_id": "2",
+      "created_at": "2024-12-01"
+    }
+  ],
+  "total": 1
+}
+```
+
+### Get Contractor Wallet
+```http
+GET /contractors/wallet
+Authorization: Bearer <contractor-token>
+```
+
+**Response:**
+```json
+{
+  "total_paid": 1200.0,
+  "pending_amount": 950.0,
+  "available_balance": 1200.0
+}
+```
+
+### Get Contractor Payouts
+```http
+GET /contractors/payouts
+Authorization: Bearer <contractor-token>
+```
+
+**Response:**
+```json
+{
+  "payouts": [
+    {
+      "id": "1",
+      "contractor_id": "1",
+      "amount": "1200.00",
+      "status": "COMPLETED",
+      "job_id": "101",
+      "created_at": "2024-12-01",
+      "paid_date": "2024-12-05"
+    },
+    {
+      "id": "2",
+      "contractor_id": "1",
+      "amount": "950.00",
+      "status": "PENDING",
+      "job_id": "103",
+      "created_at": "2024-12-03",
+      "paid_date": null
+    }
+  ],
+  "total": 2
+}
+```
+
+---
+
+## 👥 Customer Dashboard APIs
+
+### Get Customer Dashboard
+```http
+GET /customers/dashboard
+Authorization: Bearer <customer-token>
+```
+
+**Response:**
+```json
+{
+  "active_job": {
+    "id": "101",
+    "job_number": "JOB-20241201-001",
+    "customer_name": "John Smith",
+    "property_address": "123 Main St",
+    "status": "InProgress",
+    "trade": "Painting",
+    "estimated_cost": "5000",
+    "actual_cost": "4800",
+    "assigned_contractor_id": "2",
+    "created_at": "2024-12-01"
+  },
+  "total_jobs": 3,
+  "completed_jobs": 1
+}
+```
+
+### Get Customer Jobs
+```http
+GET /customers/jobs
+Authorization: Bearer <customer-token>
+```
+
+**Response:**
+```json
+{
+  "jobs": [
+    {
+      "id": "101",
+      "job_number": "JOB-20241201-001",
+      "customer_name": "John Smith",
+      "property_address": "123 Main St",
+      "status": "InProgress",
+      "trade": "Painting",
+      "estimated_cost": "5000",
+      "actual_cost": "4800",
+      "assigned_contractor_id": "2",
+      "created_at": "2024-12-01"
+    }
+  ],
+  "total": 3
+}
+```
+
+### Get Specific Job
+```http
+GET /customers/jobs/101
+Authorization: Bearer <customer-token>
+```
+
+**Response:**
+```json
+{
+  "id": "101",
+  "job_number": "JOB-20241201-001",
+  "customer_name": "John Smith",
+  "property_address": "123 Main St",
+  "status": "InProgress",
+  "trade": "Painting",
+  "estimated_cost": "5000",
+  "actual_cost": "4800",
+  "assigned_contractor_id": "2",
+  "created_at": "2024-12-01"
+}
+```
+
+### Get Contractor Location
+```http
+GET /customers/jobs/101/contractor-location
+Authorization: Bearer <customer-token>
+```
+
+**Response:**
+```json
+{
+  "latitude": 40.7128,
+  "longitude": -74.0060,
+  "last_updated": "2024-12-24T10:30:00Z",
+  "status": "En Route"
+}
+```
+
+---
+
+## 💰 Investor Dashboard APIs
+
+### Get Investor Dashboard
+```http
+GET /investors/dashboard
+Authorization: Bearer <investor-token>
+```
+
+**Response:**
+```json
+{
+  "total_investment": 50000.0,
+  "total_returns": 12500.0,
+  "active_projects": 3,
+  "roi_percentage": 25.0,
+  "investor": {
+    "name": "Bob Investor",
+    "email": "investor@apex.inc"
+  },
+  "roi_data": [
+    {"month": "Jan", "value": 12},
+    {"month": "Feb", "value": 19},
+    {"month": "Mar", "value": 15},
+    {"month": "Apr", "value": 22},
+    {"month": "May", "value": 28},
+    {"month": "Jun", "value": 25}
+  ],
+  "allocation_data": [
+    {"name": "Flips", "value": 65, "color": "#8b5cf6"},
+    {"name": "Rentals", "value": 25, "color": "#ec4899"},
+    {"name": "Commercial", "value": 10, "color": "#3b82f6"}
+  ]
+}
+```
+
+### Get Investor Reports
+```http
+GET /investors/reports
+Authorization: Bearer <investor-token>
+```
+
+**Response:**
+```json
+{
+  "reports": [
+    {
+      "id": 1,
+      "title": "Q4 2024 Performance Report",
+      "type": "Quarterly",
+      "status": "Ready",
+      "created_at": "2024-12-20",
+      "file_size": "2.4 MB"
+    }
+  ],
+  "total": 1
+}
+```
+
+---
+
+## 🏗️ FM (Facility Manager) Dashboard APIs
+
+### Get FM Dashboard
+```http
+GET /fm/dashboard
+Authorization: Bearer <fm-token>
+```
+
+**Response:**
+```json
+{
+  "pending_visits": 2,
+  "active_jobs": 5,
+  "completed_today": 1,
+  "total_visits": 15
+}
+```
+
+### Get FM Assigned Jobs
+```http
+GET /fm/jobs/assigned
+Authorization: Bearer <fm-token>
+```
+
+**Response:**
+```json
+{
+  "jobs": [
+    {
+      "id": "101",
+      "job_number": "JOB-20241201-001",
+      "customer_name": "John Smith",
+      "property_address": "123 Main St",
+      "status": "InProgress",
+      "trade": "Painting",
+      "estimated_cost": "5000",
+      "actual_cost": "4800",
+      "assigned_contractor_id": "2",
+      "created_at": "2024-12-01"
+    }
+  ],
+  "total": 3
+}
+```
+
+---
+
+## 🔧 Additional Endpoints
+
+### Health Check
+```http
+GET /health
+```
+
+**Response:**
+```json
+{
+  "status": "healthy",
+  "message": "Apex Workspace Management API is running",
+  "version": "2.0.0"
+}
+```
+
+### Root Endpoint
+```http
+GET /
+```
+
+**Response:**
+```json
+{
+  "message": "Welcome to Apex Workspace Management API",
+  "docs": "/docs",
+  "redoc": "/redoc",
+  "health": "/health"
+}
+```
+
+---
+
+## 📋 Test Users
+
+For testing purposes, the following users are available:
+
+| Role | Email | Password | Description |
+|------|-------|----------|-------------|
+| Admin | admin@apex.inc | any | Full system access |
+| Contractor | contractor@apex.inc | any | Contractor dashboard access |
+| Customer | customer@apex.inc | any | Customer portal access |
+| Investor | investor@apex.inc | any | Investor dashboard access |
+| FM | fm@apex.inc | any | Facility manager access |
+
+**Note**: CSV storage uses placeholder password hashes. Any password will work for testing.
+
+---
+
+## 🚀 Quick Start Testing
+
+1. **Start the servers:**
+   - Backend: `python main.py` (runs on http://localhost:8000)
+   - Frontend: `npm run dev` (runs on http://localhost:5173)
+
+2. **Login:**
+   ```bash
+   curl -X POST http://localhost:8000/api/v1/auth/login \
+     -H "Content-Type: application/json" \
+     -d '{"email": "admin@apex.inc", "password": "test123"}'
+   ```
+
+3. **Test dashboard:**
+   ```bash
+   curl -X GET http://localhost:8000/api/v1/admin/dashboard \
+     -H "Authorization: Bearer <your-token>"
+   ```
+
+4. **Open frontend:**
+   Visit http://localhost:5173 and login with any test user.
+
+---
 
 ## 🏗 Database Schema
 
