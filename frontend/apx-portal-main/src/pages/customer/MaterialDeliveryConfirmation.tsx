@@ -1,69 +1,30 @@
-import { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
+import { useState } from 'react';
 import PortalLayout from '@/components/PortalLayout';
 import Card from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import Badge from '@/components/ui/Badge';
-import { Package, Camera, MapPin, CheckCircle, AlertTriangle, XCircle, Send, Loader2 } from 'lucide-react';
-import { customerApiService } from '@/lib/customerApi';
+import { Package, Camera, MapPin, CheckCircle, AlertTriangle, XCircle, Send } from 'lucide-react';
+import { updateMaterialDeliveryStatus } from '@/data/mockData';
 import { DeliveryStatus } from '@/types';
 
 
 export default function MaterialDeliveryConfirmation() {
-    const { token } = useParams<{ token: string }>();
-    
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
-    const [deliveryData, setDeliveryData] = useState<any>(null);
+    // Mock Data
+    const jobId = 101;
     const [status, setStatus] = useState<DeliveryStatus | ''>('');
-    const [photos, setPhotos] = useState<File[]>([]);
+    const [photos, setPhotos] = useState<string[]>([]);
     const [notes, setNotes] = useState('');
     const [locationCaptured, setLocationCaptured] = useState(false);
     const [submitting, setSubmitting] = useState(false);
 
-    useEffect(() => {
-        const fetchDeliveryData = async () => {
-            if (!token) {
-                setError('No delivery token provided');
-                setLoading(false);
-                return;
-            }
-
-            try {
-                setLoading(true);
-                setError(null);
-                // For now, we'll use a mock response since this endpoint might not be implemented yet
-                // const data = await customerApiService.getDeliveryDetails(token);
-                const data = {
-                    job_id: 101,
-                    delivery_id: 'DEL-001',
-                    materials: [
-                        { name: 'Paint - White', quantity: 2, status: 'delivered' },
-                        { name: 'Brushes', quantity: 3, status: 'delivered' }
-                    ],
-                    delivery_address: '123 Main St, Detroit, MI',
-                    expected_delivery: new Date().toISOString()
-                };
-                setDeliveryData(data);
-            } catch (err) {
-                console.error('Failed to fetch delivery data:', err);
-                setError(err instanceof Error ? err.message : 'Failed to load delivery details');
-            } finally {
-                setLoading(false);
-            }
-        };
-
-        fetchDeliveryData();
-    }, [token]);
-
-    const handlePhotoUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-        const files = event.target.files;
-        if (files) {
-            setPhotos([...photos, ...Array.from(files)]);
-        }
+    const handlePhotoUpload = () => {
+        // Simulate upload
+        const newPhoto = `photo_${Date.now()}.jpg`;
+        setPhotos([...photos, newPhoto]);
+        alert("Photo uploaded successfully");
     };
 
-    const handleSubmit = async () => {
+    const handleSubmit = () => {
         if (!status) {
             alert("Please select a delivery status");
             return;
@@ -72,79 +33,17 @@ export default function MaterialDeliveryConfirmation() {
             alert("Please provide photos for issues");
             return;
         }
-        if (!token) {
-            alert("Invalid delivery token");
-            return;
-        }
 
-        try {
-            setSubmitting(true);
-            
-            const formData = new FormData();
-            formData.append('status', status);
-            formData.append('notes', notes);
-            formData.append('location_verified', locationCaptured.toString());
-            
-            photos.forEach((photo, index) => {
-                formData.append(`photo_${index}`, photo);
-            });
+        setSubmitting(true);
 
-            await customerApiService.confirmMaterialDeliveryByToken(token, formData);
-            
-            alert("Delivery confirmation submitted successfully!");
-            // Could redirect to a success page or dashboard
-        } catch (err) {
-            console.error('Failed to submit delivery confirmation:', err);
-            alert('Failed to submit confirmation. Please try again.');
-        } finally {
+        // Mock API call
+        setTimeout(() => {
+            updateMaterialDeliveryStatus(jobId, status as DeliveryStatus, photos, locationCaptured ? { latitude: 42.3314, longitude: -83.0458 } : undefined);
             setSubmitting(false);
-        }
+            alert("Delivery confirmation submitted!");
+            // Redirect or show success state
+        }, 1500);
     };
-
-    const captureLocation = () => {
-        if (navigator.geolocation) {
-            navigator.geolocation.getCurrentPosition(
-                (position) => {
-                    setLocationCaptured(true);
-                    alert("Location captured successfully");
-                },
-                (error) => {
-                    console.error('Error getting location:', error);
-                    alert("Could not capture location. Please try again.");
-                }
-            );
-        } else {
-            alert("Geolocation is not supported by this browser.");
-        }
-    };
-
-    if (loading) {
-        return (
-            <div className="max-w-2xl mx-auto flex items-center justify-center h-64">
-                <div className="text-center">
-                    <Loader2 className="w-8 h-8 animate-spin text-purple-600 mx-auto mb-4" />
-                    <p className="text-gray-600">Loading delivery details...</p>
-                </div>
-            </div>
-        );
-    }
-
-    if (error || !deliveryData) {
-        return (
-            <div className="max-w-2xl mx-auto">
-                <Card className="text-center p-8">
-                    <AlertTriangle className="w-12 h-12 text-red-500 mx-auto mb-4" />
-                    <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-2">Invalid Delivery Link</h2>
-                    <p className="text-gray-600 dark:text-gray-400 mb-4">
-                        {error || 'The delivery confirmation link is invalid or has expired.'}
-                    </p>
-                    <Button onClick={() => window.location.reload()}>
-                        Retry
-                    </Button>
-                </Card>
-            </div>
-        );
-    }
 
     return (
         <div className="max-w-2xl mx-auto space-y-6 animate-fade-in pb-20">
@@ -154,21 +53,7 @@ export default function MaterialDeliveryConfirmation() {
                     <Package className="w-8 h-8 text-purple-600 dark:text-purple-400" />
                 </div>
                 <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Verify Your Delivery</h1>
-                <p className="text-gray-500">Please inspect the items delivered to {deliveryData.delivery_address}</p>
-                <p className="text-sm text-gray-400">Delivery ID: {deliveryData.delivery_id}</p>
-            </div>
-
-            {/* Materials List */}
-            <Card>
-                <div className="mb-4 font-bold text-lg border-b pb-2">Delivered Materials</div>
-                <div className="space-y-2">
-                    {deliveryData.materials?.map((material: any, index: number) => (
-                        <div key={index} className="flex justify-between items-center p-2 bg-gray-50 dark:bg-gray-800 rounded">
-                            <span>{material.name}</span>
-                            <span className="text-sm text-gray-500">Qty: {material.quantity}</span>
-                        </div>
-                    ))}
-                </div>
+                <p className="text-gray-500">Please inspect the items delivered to your property.</p>
             </div>
 
             {/* 1. Status Selection */}
@@ -202,28 +87,19 @@ export default function MaterialDeliveryConfirmation() {
                     <Card>
                         <div className="mb-4 font-bold text-lg border-b pb-2">2. Photo Evidence (Required)</div>
                         <div
+                            onClick={handlePhotoUpload}
                             className="border-2 border-dashed border-gray-300 dark:border-gray-700 rounded-xl p-8 text-center hover:bg-gray-50 dark:hover:bg-gray-800/50 cursor-pointer transition-colors"
                         >
-                            <input
-                                type="file"
-                                multiple
-                                accept="image/*"
-                                onChange={handlePhotoUpload}
-                                className="hidden"
-                                id="photo-upload"
-                            />
-                            <label htmlFor="photo-upload" className="cursor-pointer">
-                                <Camera className="w-8 h-8 text-gray-400 mx-auto mb-2" />
-                                <p className="font-medium text-gray-900 dark:text-white">Tap to take photo</p>
-                                <p className="text-sm text-gray-500">or upload from gallery</p>
-                            </label>
+                            <Camera className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+                            <p className="font-medium text-gray-900 dark:text-white">Tap to take photo</p>
+                            <p className="text-sm text-gray-500">or upload from gallery</p>
                         </div>
 
                         {photos.length > 0 && (
                             <div className="mt-4 grid grid-cols-3 gap-2">
-                                {photos.map((photo, i) => (
+                                {photos.map((_, i) => (
                                     <div key={i} className="aspect-square bg-gray-200 rounded-lg flex items-center justify-center text-xs text-gray-500 relative group">
-                                        {photo.name || `Photo ${i + 1}`}
+                                        Photo {i + 1}
                                         <button
                                             onClick={(e) => { e.stopPropagation(); setPhotos(photos.filter((_, idx) => idx !== i)); }}
                                             className="absolute top-1 right-1 bg-red-500 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
@@ -264,7 +140,7 @@ export default function MaterialDeliveryConfirmation() {
                         </div>
                     </div>
                     {!locationCaptured && (
-                        <Button size="sm" variant="outline" onClick={captureLocation}>
+                        <Button size="sm" variant="outline" onClick={() => { setLocationCaptured(true); alert("Location captured"); }}>
                             Allow GPS
                         </Button>
                     )}
@@ -281,17 +157,8 @@ export default function MaterialDeliveryConfirmation() {
                         disabled={submitting || !status || (status !== 'Correct' && photos.length === 0)}
                         onClick={handleSubmit}
                     >
-                        {submitting ? (
-                            <>
-                                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                                Submitting...
-                            </>
-                        ) : (
-                            <>
-                                Confirm Delivery Status
-                                <Send className="w-4 h-4 ml-2" />
-                            </>
-                        )}
+                        {submitting ? 'Submitting...' : 'Confirm Delivery Status'}
+                        <Send className="w-4 h-4 ml-2" />
                     </Button>
                 </div>
             </div>

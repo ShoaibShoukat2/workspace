@@ -1,0 +1,87 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: apex_postgres
+    environment:
+      POSTGRES_DB: apex_workspace
+      POSTGRES_USER: apex_user
+      POSTGRES_PASSWORD: apex_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - apex_network
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: apex_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - apex_network
+
+  # FastAPI Application
+  api:
+    build: .
+    container_name: apex_api
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://apex_user:apex_password@postgres:5432/apex_workspace
+      - REDIS_URL=redis://redis:6379/0
+      - DEBUG=True
+    depends_on:
+      - postgres
+      - redis
+    volumes:
+      - ./uploads:/app/uploads
+    networks:
+      - apex_network
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+
+  # Celery Worker (for background tasks)
+  celery:
+    build: .
+    container_name: apex_celery
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://apex_user:apex_password@postgres:5432/apex_workspace
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://redis:6379/2
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - apex_network
+    command: celery -A app.tasks.celery worker --loglevel=info
+
+  # Celery Beat (for scheduled tasks)
+  celery-beat:
+    build: .
+    container_name: apex_celery_beat
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://apex_user:apex_password@postgres:5432/apex_workspace
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://redis:6379/2
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - apex_network
+    command: celery -A app.tasks.celery beat --loglevel=info
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  apex_network:
+    driver: bridge

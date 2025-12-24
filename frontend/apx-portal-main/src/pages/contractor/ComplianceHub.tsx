@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import PortalLayout from '@/components/PortalLayout';
@@ -17,34 +17,25 @@ import {
     CheckCircle,
     Calendar
 } from 'lucide-react';
-import { contractorApiService } from '@/lib/contractorApi';
+import { contractorCompliance, updateContractorCompliance } from '@/data/mockData';
 import { formatDate } from '@/lib/utils';
 
 export default function ComplianceHub() {
     const { currentUser } = useAuth();
     const navigate = useNavigate();
 
-    const [compliance, setCompliance] = useState<any[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
-    const [uploading, setUploading] = useState<string | null>(null);
-
-    useEffect(() => {
-        const fetchCompliance = async () => {
-            try {
-                setLoading(true);
-                setError(null);
-                const response = await contractorApiService.getCompliance();
-                setCompliance(response.results);
-            } catch (err) {
-                setError(err instanceof Error ? err.message : 'Failed to load compliance data');
-            } finally {
-                setLoading(false);
-            }
-        };
-
-        fetchCompliance();
-    }, []);
+    const [compliance, setCompliance] = useState(
+        contractorCompliance.find(c => c.contractorId === currentUser?.id) || {
+            contractorId: currentUser?.id || 0,
+            w9Uploaded: false,
+            insuranceUploaded: false,
+            insuranceExpiryDate: '',
+            independentAgreementSigned: false,
+            liabilityWaiverSigned: false,
+            paymentTermsSigned: false,
+            complianceStatus: 'blocked' as const,
+        }
+    );
 
     const navItems = [
         { label: 'Dashboard', path: '/contractor/dashboard', icon: <LayoutDashboard className="w-5 h-5" /> },
@@ -53,96 +44,49 @@ export default function ComplianceHub() {
         { label: 'Wallet', path: '/contractor/wallet', icon: <WalletIcon className="w-5 h-5" /> },
     ];
 
-    const handleFileUpload = async (type: 'w9' | 'insurance') => {
-        try {
-            // Create a file input for upload
-            const input = document.createElement('input');
-            input.type = 'file';
-            input.accept = '.pdf,.jpg,.jpeg,.png';
-            
-            input.onchange = async (e) => {
-                const file = (e.target as HTMLInputElement).files?.[0];
-                if (!file) return;
-
-                const formData = new FormData();
-                formData.append('document', file);
-                formData.append('document_type', type === 'w9' ? 'W9' : 'INSURANCE');
-
-                try {
-                    setUploading(type);
-                    await contractorApiService.uploadCompliance(formData);
-                    
-                    // Refresh compliance data
-                    const response = await contractorApiService.getCompliance();
-                    setCompliance(response.results);
-                    
-                    alert(`${type === 'w9' ? 'W-9' : 'Insurance Certificate'} uploaded successfully!`);
-                } catch (err) {
-                    alert('Failed to upload document. Please try again.');
-                } finally {
-                    setUploading(null);
-                }
-            };
-            
-            input.click();
-        } catch (err) {
-            alert('Failed to upload document');
-        }
+    const handleFileUpload = (type: 'w9' | 'insurance') => {
+        // Simulate file upload
+        const updated = {
+            ...compliance,
+            ...(type === 'w9' ? { w9Uploaded: true } : { insuranceUploaded: true })
+        };
+        setCompliance(updated);
+        updateContractorCompliance(currentUser?.id || 0, updated);
+        alert(`${type === 'w9' ? 'W-9' : 'Insurance Certificate'} uploaded successfully (simulated)`);
     };
 
     const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        // Note: This would need an API endpoint to update insurance expiry date
-        // For now, we'll just update locally
-        console.log('Insurance expiry date updated:', e.target.value);
+        const updated = { ...compliance, insuranceExpiryDate: e.target.value };
+        setCompliance(updated);
+        updateContractorCompliance(currentUser?.id || 0, updated);
     };
 
     const handleAgreementToggle = (agreement: 'independent' | 'liability' | 'payment') => {
-        // Note: This would need an API endpoint to update agreement status
-        // For now, we'll just show a message
-        alert(`${agreement} agreement status updated (would be saved via API)`);
-    };
+        const field =
+            agreement === 'independent' ? 'independentAgreementSigned' :
+                agreement === 'liability' ? 'liabilityWaiverSigned' :
+                    'paymentTermsSigned';
 
-    const getDocumentStatus = (docType: string) => {
-        return compliance.find(doc => doc.document_type === docType);
+        const updated = { ...compliance, [field]: !compliance[field as keyof typeof compliance] };
+        setCompliance(updated);
+        updateContractorCompliance(currentUser?.id || 0, updated);
     };
-
-    const w9Doc = getDocumentStatus('W9');
-    const insuranceDoc = getDocumentStatus('INSURANCE');
 
     const isExpiringWithin30Days = () => {
-        if (!insuranceDoc?.expiry_date) return false;
-        const expiry = new Date(insuranceDoc.expiry_date);
+        if (!compliance.insuranceExpiryDate) return false;
+        const expiry = new Date(compliance.insuranceExpiryDate);
         const now = new Date();
         const thirtyDaysFromNow = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
         return expiry < thirtyDaysFromNow && expiry > now;
     };
 
-    const allCompliant = w9Doc?.status === 'approved' && 
-                        insuranceDoc?.status === 'approved' && 
-                        insuranceDoc?.expiry_date && 
-                        new Date(insuranceDoc.expiry_date) > new Date();
-
-    if (loading) {
-        return (
-            <PortalLayout title="Compliance Hub" navItems={navItems}>
-                <div className="flex items-center justify-center py-12">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
-                    <span className="ml-3 text-gray-600 dark:text-gray-400">Loading compliance data...</span>
-                </div>
-            </PortalLayout>
-        );
-    }
-
-    if (error) {
-        return (
-            <PortalLayout title="Compliance Hub" navItems={navItems}>
-                <Card className="text-center py-12">
-                    <p className="text-red-600 dark:text-red-400 mb-4">{error}</p>
-                    <Button onClick={() => window.location.reload()}>Retry</Button>
-                </Card>
-            </PortalLayout>
-        );
-    }
+    const allCompliant = compliance.w9Uploaded &&
+        compliance.insuranceUploaded &&
+        compliance.insuranceExpiryDate &&
+        new Date(compliance.insuranceExpiryDate) > new Date() &&
+        compliance.independentAgreementSigned &&
+        compliance.liabilityWaiverSigned &&
+        compliance.paymentTermsSigned;
 
     return (
         <PortalLayout title="Compliance Hub" navItems={navItems}>
@@ -181,7 +125,7 @@ export default function ComplianceHub() {
                             <div>
                                 <h4 className="font-semibold text-yellow-800 dark:text-yellow-300">Insurance Expiring Soon!</h4>
                                 <p className="text-sm text-yellow-700 dark:text-yellow-200 mt-1">
-                                    Your insurance expires on {formatDate(insuranceDoc?.expiry_date || '')}. Please renew soon to avoid service interruption.
+                                    Your insurance expires on {formatDate(compliance.insuranceExpiryDate)}. Please renew soon to avoid service interruption.
                                 </p>
                             </div>
                         </div>
@@ -202,32 +146,19 @@ export default function ComplianceHub() {
                                         <p className="text-sm text-gray-600 dark:text-gray-400">Tax documentation</p>
                                     </div>
                                 </div>
-                                {w9Doc?.status === 'approved' && (
+                                {compliance.w9Uploaded && (
                                     <CheckCircle className="w-5 h-5 text-green-500 dark:text-green-400" />
                                 )}
                             </div>
                             <Button
-                                variant={w9Doc ? 'outline' : 'primary'}
+                                variant={compliance.w9Uploaded ? 'outline' : 'primary'}
                                 size="sm"
                                 className="w-full"
                                 onClick={() => handleFileUpload('w9')}
-                                disabled={uploading === 'w9'}
                             >
-                                {uploading === 'w9' ? (
-                                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current mr-2"></div>
-                                ) : (
-                                    <Upload className="w-4 h-4 mr-2" />
-                                )}
-                                {w9Doc ? 'Re-upload W-9' : 'Upload W-9'}
+                                <Upload className="w-4 h-4 mr-2" />
+                                {compliance.w9Uploaded ? 'Re-upload W-9' : 'Upload W-9'}
                             </Button>
-                            {w9Doc && (
-                                <div className="mt-2 text-xs">
-                                    <Badge variant={w9Doc.status === 'approved' ? 'success' : w9Doc.status === 'rejected' ? 'danger' : 'warning'}>
-                                        {w9Doc.status}
-                                    </Badge>
-                                    <p className="text-gray-500 mt-1">Uploaded: {formatDate(w9Doc.uploaded_date)}</p>
-                                </div>
-                            )}
                         </Card>
 
                         {/* Insurance Certificate */}
@@ -240,32 +171,19 @@ export default function ComplianceHub() {
                                         <p className="text-sm text-gray-600 dark:text-gray-400">Liability insurance</p>
                                     </div>
                                 </div>
-                                {insuranceDoc?.status === 'approved' && (
+                                {compliance.insuranceUploaded && (
                                     <CheckCircle className="w-5 h-5 text-green-500 dark:text-green-400" />
                                 )}
                             </div>
                             <Button
-                                variant={insuranceDoc ? 'outline' : 'primary'}
+                                variant={compliance.insuranceUploaded ? 'outline' : 'primary'}
                                 size="sm"
                                 className="w-full"
                                 onClick={() => handleFileUpload('insurance')}
-                                disabled={uploading === 'insurance'}
                             >
-                                {uploading === 'insurance' ? (
-                                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current mr-2"></div>
-                                ) : (
-                                    <Upload className="w-4 h-4 mr-2" />
-                                )}
-                                {insuranceDoc ? 'Re-upload Certificate' : 'Upload Certificate'}
+                                <Upload className="w-4 h-4 mr-2" />
+                                {compliance.insuranceUploaded ? 'Re-upload Certificate' : 'Upload Certificate'}
                             </Button>
-                            {insuranceDoc && (
-                                <div className="mt-2 text-xs">
-                                    <Badge variant={insuranceDoc.status === 'approved' ? 'success' : insuranceDoc.status === 'rejected' ? 'danger' : 'warning'}>
-                                        {insuranceDoc.status}
-                                    </Badge>
-                                    <p className="text-gray-500 mt-1">Uploaded: {formatDate(insuranceDoc.uploaded_date)}</p>
-                                </div>
-                            )}
                         </Card>
                     </div>
 
@@ -280,13 +198,13 @@ export default function ComplianceHub() {
                         </div>
                         <Input
                             type="date"
-                            value={insuranceDoc?.expiry_date || ''}
+                            value={compliance.insuranceExpiryDate}
                             onChange={handleDateChange}
                             className="max-w-md border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
                         />
-                        {insuranceDoc?.expiry_date && (
+                        {compliance.insuranceExpiryDate && (
                             <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">
-                                Expires: {formatDate(insuranceDoc.expiry_date)}
+                                Expires: {formatDate(compliance.insuranceExpiryDate)}
                             </p>
                         )}
                     </Card>

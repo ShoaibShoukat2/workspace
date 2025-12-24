@@ -1,7 +1,8 @@
 
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
-import { useState, useEffect } from 'react';
+import { adminApi } from '@/services/adminApi';
 import PortalLayout from '@/components/PortalLayout';
 import Card from '@/components/ui/Card';
 import Badge from '@/components/ui/Badge';
@@ -14,10 +15,8 @@ import {
     Briefcase,
     Calendar,
     Users,
-    FileText,
-    Loader2
+    FileText
 } from 'lucide-react';
-import { adminApiService } from '@/lib/adminApi';
 import { formatCurrency } from '@/lib/utils';
 import {
     AreaChart,
@@ -33,68 +32,29 @@ import {
 
 export default function AdminDashboard() {
     const navigate = useNavigate();
-    const { user } = useAuth();
+    const { currentUser } = useAuth();
     
+    const [dashboardData, setDashboardData] = useState<any>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    const [dashboardStats, setDashboardStats] = useState<any>(null);
-    const [jobs, setJobs] = useState<any[]>([]);
-    const [disputes, setDisputes] = useState<any[]>([]);
-    const [payouts, setPayouts] = useState<any[]>([]);
 
     useEffect(() => {
-        const fetchDashboardData = async () => {
-            try {
-                setLoading(true);
-                setError(null);
-
-                // Fetch dashboard stats
-                const [statsData, jobsData, disputesData, payoutsData] = await Promise.all([
-                    adminApiService.getDashboardStats(),
-                    adminApiService.getJobs({ limit: 10 }),
-                    adminApiService.getDisputes({ limit: 10 }),
-                    adminApiService.getPayouts({ limit: 10 })
-                ]);
-
-                setDashboardStats(statsData);
-                setJobs(jobsData.results || jobsData);
-                setDisputes(disputesData.results || disputesData);
-                setPayouts(payoutsData.results || payoutsData);
-            } catch (err) {
-                console.error('Failed to fetch dashboard data:', err);
-                setError(err instanceof Error ? err.message : 'Failed to load dashboard data');
-            } finally {
-                setLoading(false);
-            }
-        };
-
-        fetchDashboardData();
+        loadDashboardData();
     }, []);
 
-    if (loading) {
-        return (
-            <PortalLayout title="Admin Dashboard" navItems={navItems}>
-                <div className="flex items-center justify-center h-64">
-                    <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
-                    <span className="ml-2 text-gray-600">Loading dashboard...</span>
-                </div>
-            </PortalLayout>
-        );
-    }
-
-    if (error) {
-        return (
-            <PortalLayout title="Admin Dashboard" navItems={navItems}>
-                <div className="flex items-center justify-center h-64">
-                    <div className="text-center">
-                        <AlertTriangle className="w-12 h-12 text-red-500 mx-auto mb-4" />
-                        <p className="text-red-600 mb-4">{error}</p>
-                        <Button onClick={() => window.location.reload()}>Retry</Button>
-                    </div>
-                </div>
-            </PortalLayout>
-        );
-    }
+    const loadDashboardData = async () => {
+        try {
+            setLoading(true);
+            setError(null);
+            const data = await adminApi.getDashboard();
+            setDashboardData(data);
+        } catch (err: any) {
+            console.error('Failed to load dashboard data:', err);
+            setError('Failed to load dashboard data. Please try again.');
+        } finally {
+            setLoading(false);
+        }
+    };
 
     const navItems = [
         { label: 'Dashboard', path: '/admin/dashboard', icon: <LayoutDashboard className="w-5 h-5" /> },
@@ -107,25 +67,45 @@ export default function AdminDashboard() {
         { label: 'Leads', path: '/admin/leads', icon: <Users className="w-5 h-5" /> },
     ];
 
-    // Calculate stats from API data
-    const pendingDisputes = disputes.filter(d => d.status === 'Open' || d.status === 'open');
-    const pendingPayouts = payouts.filter(p => p.status === 'Processing' || p.status === 'processing');
-    const activeJobs = jobs.filter(j => j.status === 'InProgress' || j.status === 'Open' || j.status === 'in_progress' || j.status === 'open');
-    
-    const totalPendingPayouts = pendingPayouts.reduce((sum, p) => sum + (p.amount || 0), 0);
+    if (loading) {
+        return (
+            <PortalLayout title="Admin Dashboard" navItems={navItems}>
+                <div className="flex items-center justify-center h-64">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
+                </div>
+            </PortalLayout>
+        );
+    }
 
-    // Use API stats if available, otherwise calculate from data
-    const stats = {
-        pendingDisputes: dashboardStats?.pending_disputes || pendingDisputes.length,
-        pendingPayouts: dashboardStats?.pending_payouts || pendingPayouts.length,
-        blockedContractors: dashboardStats?.blocked_contractors || 0,
-        activeJobs: dashboardStats?.active_jobs || activeJobs.length,
-        scheduledMeetings: dashboardStats?.scheduled_meetings || 3,
-        activeLeads: dashboardStats?.active_leads || 5,
-        totalPendingPayouts: dashboardStats?.total_pending_payouts || totalPendingPayouts
-    };
+    if (error) {
+        return (
+            <PortalLayout title="Admin Dashboard" navItems={navItems}>
+                <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
+                    <p className="text-red-700 dark:text-red-400">{error}</p>
+                    <button 
+                        onClick={loadDashboardData}
+                        className="mt-2 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
+                    >
+                        Retry
+                    </button>
+                </div>
+            </PortalLayout>
+        );
+    }
 
-    const revenueData = dashboardStats?.revenue_data || [
+    // Extract data from API response with fallbacks
+    const pendingDisputes = dashboardData?.pending_disputes || 0;
+    const pendingPayoutsCount = dashboardData?.pending_payouts_count || 0;
+    const pendingPayoutsAmount = dashboardData?.pending_payouts_amount || 0;
+    const blockedContractors = dashboardData?.blocked_contractors || 0;
+    const activeJobs = dashboardData?.active_jobs || 0;
+    const scheduledMeetings = dashboardData?.scheduled_meetings || 0;
+    const activeLeads = dashboardData?.active_leads || 0;
+    const recentContractors = dashboardData?.recent_contractors || [];
+    const activeInvestors = dashboardData?.active_investors || [];
+
+    // Mock data for charts (will be replaced with real data from API)
+    const revenueData = dashboardData?.revenue_data || [
         { name: 'Jan', value: 4000 },
         { name: 'Feb', value: 3000 },
         { name: 'Mar', value: 2000 },
@@ -135,11 +115,11 @@ export default function AdminDashboard() {
         { name: 'Jul', value: 3490 },
     ];
 
-    const jobStatsData = dashboardStats?.job_stats || [
-        { name: 'Open', count: jobs.filter(j => j.status === 'Open' || j.status === 'open').length },
-        { name: 'In Progress', count: jobs.filter(j => j.status === 'InProgress' || j.status === 'in_progress').length },
-        { name: 'Completed', count: jobs.filter(j => j.status === 'Complete' || j.status === 'completed').length },
-        { name: 'Paid', count: jobs.filter(j => j.status === 'Paid' || j.status === 'paid').length },
+    const jobStatsData = dashboardData?.job_stats || [
+        { name: 'Open', count: 0 },
+        { name: 'In Progress', count: 0 },
+        { name: 'Completed', count: 0 },
+        { name: 'Paid', count: 0 },
     ];
 
     return (
@@ -155,7 +135,7 @@ export default function AdminDashboard() {
                         <div className="flex items-center justify-between">
                             <div>
                                 <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Pending Disputes</p>
-                                <p className="text-3xl font-bold text-gray-900 dark:text-white">{stats.pendingDisputes}</p>
+                                <p className="text-3xl font-bold text-gray-900 dark:text-white">{pendingDisputes}</p>
                             </div>
                             <div className="w-12 h-12 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
                                 <AlertTriangle className="w-6 h-6 text-red-600 dark:text-red-400" />
@@ -171,8 +151,8 @@ export default function AdminDashboard() {
                         <div className="flex items-center justify-between">
                             <div>
                                 <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Pending Payouts</p>
-                                <p className="text-3xl font-bold text-gray-900 dark:text-white">{stats.pendingPayouts}</p>
-                                <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">{formatCurrency(stats.totalPendingPayouts)}</p>
+                                <p className="text-3xl font-bold text-gray-900 dark:text-white">{pendingPayoutsCount}</p>
+                                <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">{formatCurrency(pendingPayoutsAmount)}</p>
                             </div>
                             <div className="w-12 h-12 rounded-full bg-yellow-100 dark:bg-yellow-900/30 flex items-center justify-center">
                                 <DollarSign className="w-6 h-6 text-yellow-600 dark:text-yellow-400" />
@@ -188,7 +168,7 @@ export default function AdminDashboard() {
                         <div className="flex items-center justify-between">
                             <div>
                                 <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Blocked Contractors</p>
-                                <p className="text-3xl font-bold text-gray-900 dark:text-white">{stats.blockedContractors}</p>
+                                <p className="text-3xl font-bold text-gray-900 dark:text-white">{blockedContractors}</p>
                             </div>
                             <div className="w-12 h-12 rounded-full bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center">
                                 <ShieldCheck className="w-6 h-6 text-orange-600 dark:text-orange-400" />
@@ -204,7 +184,7 @@ export default function AdminDashboard() {
                         <div className="flex items-center justify-between">
                             <div>
                                 <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Active Jobs</p>
-                                <p className="text-3xl font-bold text-gray-900 dark:text-white">{stats.activeJobs}</p>
+                                <p className="text-3xl font-bold text-gray-900 dark:text-white">{activeJobs}</p>
                             </div>
                             <div className="w-12 h-12 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
                                 <Briefcase className="w-6 h-6 text-blue-600 dark:text-blue-400" />
@@ -220,7 +200,7 @@ export default function AdminDashboard() {
                         <div className="flex items-center justify-between">
                             <div>
                                 <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Scheduled Meetings</p>
-                                <p className="text-3xl font-bold text-gray-900 dark:text-white">{stats.scheduledMeetings}</p>
+                                <p className="text-3xl font-bold text-gray-900 dark:text-white">{scheduledMeetings}</p>
                             </div>
                             <div className="w-12 h-12 rounded-full bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center">
                                 <Calendar className="w-6 h-6 text-purple-600 dark:text-purple-400" />
@@ -236,7 +216,7 @@ export default function AdminDashboard() {
                         <div className="flex items-center justify-between">
                             <div>
                                 <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Active Leads</p>
-                                <p className="text-3xl font-bold text-gray-900 dark:text-white">{stats.activeLeads}</p>
+                                <p className="text-3xl font-bold text-gray-900 dark:text-white">{activeLeads}</p>
                             </div>
                             <div className="w-12 h-12 rounded-full bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center">
                                 <Users className="w-6 h-6 text-indigo-600 dark:text-indigo-400" />
@@ -299,22 +279,22 @@ export default function AdminDashboard() {
                             <Button variant="outline" size="sm" onClick={() => navigate('/admin/investors')}>View All</Button>
                         </div>
                         <div className="space-y-4">
-                            {dashboardStats?.recent_investors?.slice(0, 5).map((investor: any) => (
+                            {activeInvestors.length > 0 ? activeInvestors.slice(0, 5).map((investor: any) => (
                                 <div key={investor.id} className="flex items-center justify-between p-3 rounded-xl bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-800 smooth-transition">
                                     <div className="flex items-center space-x-3">
                                         <div className="w-10 h-10 rounded-full bg-gradient-to-br from-green-400 to-emerald-600 flex items-center justify-center text-white font-bold overflow-hidden shadow-sm">
-                                            {investor.avatar_url ? <img src={investor.avatar_url} alt={investor.name} className="w-full h-full object-cover" /> : (investor.name || investor.first_name || 'U').charAt(0)}
+                                            {investor.avatar_url ? <img src={investor.avatar_url} alt={investor.name} className="w-full h-full object-cover" /> : (investor.name || investor.email || 'U').charAt(0)}
                                         </div>
                                         <div>
-                                            <p className="font-semibold text-gray-900 dark:text-white">{investor.name || `${investor.first_name} ${investor.last_name}`}</p>
+                                            <p className="font-semibold text-gray-900 dark:text-white">{investor.name || investor.email}</p>
                                             <p className="text-xs text-gray-500 dark:text-gray-400">{investor.email}</p>
                                         </div>
                                     </div>
                                     <Badge variant="success">Active</Badge>
                                 </div>
-                            )) || (
-                                <div className="text-center py-4 text-gray-500">
-                                    No investor data available
+                            )) : (
+                                <div className="text-center py-4 text-gray-500 dark:text-gray-400">
+                                    No active investors found
                                 </div>
                             )}
                         </div>
@@ -327,24 +307,24 @@ export default function AdminDashboard() {
                             <Button variant="outline" size="sm" onClick={() => navigate('/admin/legal-compliance')}>View All</Button>
                         </div>
                         <div className="space-y-4">
-                            {dashboardStats?.recent_contractors?.slice(0, 5).map((contractor: any) => (
+                            {recentContractors.length > 0 ? recentContractors.slice(0, 5).map((contractor: any) => (
                                 <div key={contractor.id} className="flex items-center justify-between p-3 rounded-xl bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-800 smooth-transition">
                                     <div className="flex items-center space-x-3">
                                         <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-400 to-indigo-600 flex items-center justify-center text-white font-bold overflow-hidden shadow-sm">
-                                            {contractor.avatar_url ? <img src={contractor.avatar_url} alt={contractor.name} className="w-full h-full object-cover" /> : (contractor.name || contractor.first_name || 'U').charAt(0)}
+                                            {contractor.avatar_url ? <img src={contractor.avatar_url} alt={contractor.name} className="w-full h-full object-cover" /> : (contractor.name || contractor.email || 'U').charAt(0)}
                                         </div>
                                         <div>
-                                            <p className="font-semibold text-gray-900 dark:text-white">{contractor.name || `${contractor.first_name} ${contractor.last_name}`}</p>
+                                            <p className="font-semibold text-gray-900 dark:text-white">{contractor.name || contractor.email}</p>
                                             <p className="text-xs text-gray-500 dark:text-gray-400">{contractor.trade || 'General'}</p>
                                         </div>
                                     </div>
-                                    <Badge variant={contractor.compliance_status === 'active' || contractor.compliance_status === 'verified' ? 'success' : 'danger'}>
-                                        {contractor.compliance_status === 'active' || contractor.compliance_status === 'verified' ? 'Verified' : 'Blocked'}
+                                    <Badge variant={contractor.compliance_status === 'active' ? 'success' : 'danger'}>
+                                        {contractor.compliance_status === 'active' ? 'Verified' : 'Blocked'}
                                     </Badge>
                                 </div>
-                            )) || (
-                                <div className="text-center py-4 text-gray-500">
-                                    No contractor data available
+                            )) : (
+                                <div className="text-center py-4 text-gray-500 dark:text-gray-400">
+                                    No recent contractors found
                                 </div>
                             )}
                         </div>

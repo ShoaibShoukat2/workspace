@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import PortalLayout from '@/components/PortalLayout';
@@ -14,7 +14,7 @@ import {
     Save,
     AlertCircle
 } from 'lucide-react';
-import { fmApiService } from '@/lib/fmApi';
+import { jobs, createDispute } from '@/data/mockData';
 import { formatCurrency } from '@/lib/utils';
 
 export default function ChangeOrderForm() {
@@ -22,11 +22,6 @@ export default function ChangeOrderForm() {
     const navigate = useNavigate();
     const { currentUser } = useAuth();
 
-    const [job, setJob] = useState<any>(null);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
-    const [submitting, setSubmitting] = useState(false);
-    
     const [reason, setReason] = useState('');
     const [lineItems, setLineItems] = useState<Array<{
         description: string;
@@ -37,24 +32,7 @@ export default function ChangeOrderForm() {
         { description: '', category: 'Labor', quantity: 1, rate: 0 }
     ]);
 
-    useEffect(() => {
-        const fetchJob = async () => {
-            if (!jobId) return;
-            
-            try {
-                setLoading(true);
-                setError(null);
-                const jobData = await fmApiService.getJobDetail(Number(jobId));
-                setJob(jobData);
-            } catch (err) {
-                setError(err instanceof Error ? err.message : 'Failed to load job');
-            } finally {
-                setLoading(false);
-            }
-        };
-
-        fetchJob();
-    }, [jobId]);
+    const job = jobs.find(j => j.id === Number(jobId));
 
     const navItems = [
         { label: 'Dashboard', path: '/fm/dashboard', icon: <LayoutDashboard className="w-5 h-5" /> },
@@ -62,23 +40,14 @@ export default function ChangeOrderForm() {
         { label: 'Change Orders', path: '/fm/dashboard', icon: <FileEdit className="w-5 h-5" /> },
     ];
 
-    if (loading) {
-        return (
-            <PortalLayout title="Loading..." navItems={navItems}>
-                <div className="flex items-center justify-center py-12">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
-                    <span className="ml-3 text-gray-600 dark:text-gray-400">Loading job details...</span>
-                </div>
-            </PortalLayout>
-        );
-    }
-
-    if (error || !job) {
+    if (!job) {
         return (
             <PortalLayout title="Job Not Found" navItems={navItems}>
                 <Card className="text-center py-12">
-                    <p className="text-red-600 dark:text-red-400 mb-4">{error || "Job not found."}</p>
-                    <Button onClick={() => navigate('/fm/dashboard')}>Back to Dashboard</Button>
+                    <p className="text-gray-600 dark:text-gray-400">Job not found.</p>
+                    <Button onClick={() => navigate('/fm/dashboard')} className="mt-4">
+                        Back to Dashboard
+                    </Button>
                 </Card>
             </PortalLayout>
         );
@@ -102,7 +71,7 @@ export default function ChangeOrderForm() {
         return lineItems.reduce((sum, item) => sum + (item.quantity * item.rate), 0);
     };
 
-    const handleSubmit = async (e: React.FormEvent) => {
+    const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
 
         const validLineItems = lineItems.filter(item => item.description && item.rate > 0);
@@ -117,43 +86,26 @@ export default function ChangeOrderForm() {
             return;
         }
 
-        try {
-            setSubmitting(true);
-            
-            const changeOrderData = {
-                reason,
-                line_items: validLineItems.map(item => ({
-                    description: item.description,
-                    category: item.category,
-                    quantity: item.quantity,
-                    unit_price: item.rate,
-                    total_price: item.quantity * item.rate
-                })),
-                total_amount: calculateTotal(),
-                requested_by: currentUser?.id
-            };
+        const changeOrderDetails = `Change Order Request:\nReason: ${reason}\n\nAdditional Costs:\n${validLineItems.map(item =>
+            `- ${item.description}: ${item.quantity} x ${formatCurrency(item.rate)} = ${formatCurrency(item.quantity * item.rate)}`
+        ).join('\n')}\n\nTotal Additional: ${formatCurrency(calculateTotal())}`;
 
-            await fmApiService.createChangeOrder(Number(jobId), changeOrderData);
-            
-            alert('Change order submitted for admin approval!');
-            navigate('/fm/dashboard');
-        } catch (err) {
-            alert('Failed to submit change order. Please try again.');
-        } finally {
-            setSubmitting(false);
-        }
+        createDispute(job.id, 'fm', 'Change Order Request', changeOrderDetails);
+
+        alert('Change order submitted for admin approval!');
+        navigate('/fm/dashboard');
     };
 
     return (
-        <PortalLayout title={`Change Order: ${job.location}`} navItems={navItems}>
+        <PortalLayout title={`Change Order: ${job.propertyAddress}`} navItems={navItems}>
             <form onSubmit={handleSubmit} className="space-y-6 animate-fade-in">
                 {/* Job Info */}
                 <Card>
                     <h3 className="font-semibold text-gray-900 dark:text-white mb-2">Job Information</h3>
                     <div className="space-y-1 text-sm text-gray-600 dark:text-gray-400">
-                        <p><span className="font-medium">Property:</span> {job.location}</p>
-                        <p><span className="font-medium">Customer:</span> {job.customer_name}</p>
-                        <p><span className="font-medium">Title:</span> {job.title}</p>
+                        <p><span className="font-medium">Property:</span> {job.propertyAddress}</p>
+                        <p><span className="font-medium">Customer:</span> {job.customerName}</p>
+                        <p><span className="font-medium">Trade:</span> {job.trade}</p>
                     </div>
                 </Card>
 
@@ -278,19 +230,14 @@ export default function ChangeOrderForm() {
 
                 {/* Actions */}
                 <div className="flex space-x-4">
-                    <Button type="submit" variant="primary" className="flex-1" disabled={submitting}>
-                        {submitting ? (
-                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                        ) : (
-                            <Save className="w-4 h-4 mr-2" />
-                        )}
+                    <Button type="submit" variant="primary" className="flex-1">
+                        <Save className="w-4 h-4 mr-2" />
                         Submit Change Order
                     </Button>
                     <Button
                         type="button"
                         variant="outline"
                         onClick={() => navigate('/fm/dashboard')}
-                        disabled={submitting}
                     >
                         Cancel
                     </Button>

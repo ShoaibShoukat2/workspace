@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 
 import PortalLayout from '@/components/PortalLayout';
 import Card from '@/components/ui/Card';
@@ -17,68 +17,35 @@ import {
     XCircle,
     AlertCircle
 } from 'lucide-react';
-import { adminApiService } from '@/lib/adminApi';
+import { contractors, updateContractorCompliance } from '@/data/mockData';
 import { formatDate } from '@/lib/utils';
 
 export default function LegalCompliance() {
     const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'blocked'>('all');
-    const [compliance, setCompliance] = useState<any[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
-    const [processing, setProcessing] = useState<number | null>(null);
 
-    useEffect(() => {
-        const fetchCompliance = async () => {
-            try {
-                setLoading(true);
-                setError(null);
-                const response = await adminApiService.getCompliance({ limit: 100 });
-                setCompliance(response.results);
-            } catch (err) {
-                setError(err instanceof Error ? err.message : 'Failed to load compliance data');
-            } finally {
-                setLoading(false);
-            }
-        };
+    const navItems = [
+        { label: 'Dashboard', path: '/admin/dashboard', icon: <LayoutDashboard className="w-5 h-5" /> },
+        { label: 'Jobs', path: '/admin/jobs', icon: <Briefcase className="w-5 h-5" /> },
+        { label: 'Legal & Compliance', path: '/admin/legal-compliance', icon: <ShieldCheck className="w-5 h-5" /> },
+        { label: 'Disputes', path: '/admin/disputes', icon: <AlertTriangle className="w-5 h-5" /> },
+        { label: 'Ledger', path: '/admin/ledger', icon: <FileText className="w-5 h-5" /> },
+        { label: 'Payouts', path: '/admin/payouts', icon: <DollarSign className="w-5 h-5" /> },
+        { label: 'Meetings', path: '/admin/meetings', icon: <Calendar className="w-5 h-5" /> },
+        { label: 'Leads', path: '/admin/leads', icon: <Users className="w-5 h-5" /> },
+    ];
 
-        fetchCompliance();
-    }, []);
-
-    const filteredCompliance = compliance.filter(c =>
-        filterStatus === 'all' ? true : c.status === filterStatus
+    const filteredContractors = contractors.filter(c =>
+        filterStatus === 'all' ? true : c.complianceStatus === filterStatus
     );
 
-    const handleApprove = async (complianceId: number) => {
-        try {
-            setProcessing(complianceId);
-            await adminApiService.approveCompliance(complianceId);
-            // Refresh data
-            const response = await adminApiService.getCompliance({ limit: 100 });
-            setCompliance(response.results);
-            alert('Compliance approved successfully!');
-        } catch (err) {
-            alert('Failed to approve compliance. Please try again.');
-        } finally {
-            setProcessing(null);
-        }
+    const handleApprove = (contractorId: number) => {
+        updateContractorCompliance(contractorId, { complianceStatus: 'active' });
+        alert('Contractor approved and unblocked!');
     };
 
-    const handleReject = async (complianceId: number) => {
-        const reason = prompt('Please enter rejection reason:');
-        if (!reason) return;
-
-        try {
-            setProcessing(complianceId);
-            await adminApiService.rejectCompliance(complianceId, reason);
-            // Refresh data
-            const response = await adminApiService.getCompliance({ limit: 100 });
-            setCompliance(response.results);
-            alert('Compliance rejected successfully!');
-        } catch (err) {
-            alert('Failed to reject compliance. Please try again.');
-        } finally {
-            setProcessing(null);
-        }
+    const handleBlock = (contractorId: number) => {
+        updateContractorCompliance(contractorId, { complianceStatus: 'blocked' });
+        alert('Contractor blocked from accepting jobs.');
     };
 
     return (
@@ -112,9 +79,9 @@ export default function LegalCompliance() {
                             <CheckCircle className="w-10 h-10 text-green-600 dark:text-green-400" />
                             <div>
                                 <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                                    {compliance.filter(c => c.status === 'approved').length}
+                                    {contractors.filter(c => c.complianceStatus === 'active').length}
                                 </p>
-                                <p className="text-sm text-gray-600 dark:text-gray-400">Approved</p>
+                                <p className="text-sm text-gray-600 dark:text-gray-400">Active</p>
                             </div>
                         </div>
                     </Card>
@@ -124,9 +91,9 @@ export default function LegalCompliance() {
                             <XCircle className="w-10 h-10 text-red-600 dark:text-red-400" />
                             <div>
                                 <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                                    {compliance.filter(c => c.status === 'rejected').length}
+                                    {contractors.filter(c => c.complianceStatus === 'blocked').length}
                                 </p>
-                                <p className="text-sm text-gray-600 dark:text-gray-400">Rejected</p>
+                                <p className="text-sm text-gray-600 dark:text-gray-400">Blocked</p>
                             </div>
                         </div>
                     </Card>
@@ -136,9 +103,9 @@ export default function LegalCompliance() {
                             <AlertCircle className="w-10 h-10 text-yellow-600 dark:text-yellow-400" />
                             <div>
                                 <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                                    {compliance.filter(c => c.status === 'pending').length}
+                                    {contractors.filter(c => c.insuranceExpiry && new Date(c.insuranceExpiry) < new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)).length}
                                 </p>
-                                <p className="text-sm text-gray-600 dark:text-gray-400">Pending</p>
+                                <p className="text-sm text-gray-600 dark:text-gray-400">Expiring Soon</p>
                             </div>
                         </div>
                     </Card>
@@ -146,68 +113,59 @@ export default function LegalCompliance() {
 
                 {/* Contractors List */}
                 <div className="space-y-4">
-                    {filteredCompliance.map((item) => (
-                        <Card key={item.id}>
+                    {filteredContractors.map((contractor) => (
+                        <Card key={contractor.id}>
                             <div className="flex items-start justify-between">
                                 <div className="flex-1">
                                     <div className="flex items-center space-x-3 mb-2">
-                                        <h3 className="text-lg font-semibold text-gray-900 dark:text-white">{item.contractor_name}</h3>
-                                        <Badge variant={item.status === 'approved' ? 'success' : item.status === 'rejected' ? 'danger' : 'warning'}>
-                                            {item.status}
+                                        <h3 className="text-lg font-semibold text-gray-900 dark:text-white">{contractor.name}</h3>
+                                        <Badge variant={contractor.complianceStatus === 'active' ? 'success' : 'danger'}>
+                                            {contractor.complianceStatus}
                                         </Badge>
                                     </div>
                                     <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
-                                        Document: {item.document_type} • Contractor ID: {item.contractor_id}
+                                        Trade: {contractor.trade} • Email: {contractor.email}
                                     </p>
 
-                                    <div className="text-sm">
-                                        <p className="text-gray-600 dark:text-gray-400">
-                                            Expiry: {formatDate(item.expiry_date)}
-                                        </p>
-                                        <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
-                                            Submitted: {formatDate(item.created_at)}
-                                        </p>
+                                    {/* Compliance Items */}
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
+                                        <div className={`flex items-center space-x-2 ${contractor.hasW9 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                                            {contractor.hasW9 ? <CheckCircle className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
+                                            <span>W-9 Form</span>
+                                        </div>
+                                        <div className={`flex items-center space-x-2 ${contractor.insuranceCert ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                                            {contractor.insuranceCert ? <CheckCircle className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
+                                            <span>Insurance Certificate</span>
+                                        </div>
+                                        <div className={`flex items-center space-x-2 ${contractor.signedAgreement ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                                            {contractor.signedAgreement ? <CheckCircle className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
+                                            <span>Signed Agreement</span>
+                                        </div>
                                     </div>
+
+                                    {contractor.insuranceExpiry && (
+                                        <p className="text-xs text-gray-500 dark:text-gray-500 mt-2">
+                                            Insurance expires: {formatDate(contractor.insuranceExpiry)}
+                                        </p>
+                                    )}
                                 </div>
 
                                 <div className="flex space-x-2">
-                                    {item.status === 'pending' && (
-                                        <>
-                                            <Button 
-                                                variant="primary" 
-                                                size="sm" 
-                                                onClick={() => handleApprove(item.id)}
-                                                disabled={processing === item.id}
-                                            >
-                                                {processing === item.id ? (
-                                                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                                                ) : (
-                                                    <>
-                                                        <CheckCircle className="w-4 h-4 mr-2" />
-                                                        Approve
-                                                    </>
-                                                )}
-                                            </Button>
-                                            <Button 
-                                                variant="danger" 
-                                                size="sm" 
-                                                onClick={() => handleReject(item.id)}
-                                                disabled={processing === item.id}
-                                            >
-                                                <XCircle className="w-4 h-4 mr-2" />
-                                                Reject
-                                            </Button>
-                                        </>
+                                    {contractor.complianceStatus === 'blocked' ? (
+                                        <Button variant="primary" size="sm" onClick={() => handleApprove(contractor.id)}>
+                                            <CheckCircle className="w-4 h-4 mr-2" />
+                                            Approve
+                                        </Button>
+                                    ) : (
+                                        <Button variant="danger" size="sm" onClick={() => handleBlock(contractor.id)}>
+                                            <XCircle className="w-4 h-4 mr-2" />
+                                            Block
+                                        </Button>
                                     )}
                                 </div>
                             </div>
                         </Card>
                     ))}
-                    {filteredCompliance.length === 0 && (
-                        <Card className="text-center py-12">
-                            <p className="text-gray-500">No compliance documents found for the selected filter.</p>
-                        </Card>
-                    )}
                 </div>
             </div>
         </PortalLayout>

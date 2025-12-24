@@ -1,5 +1,4 @@
 import { useNavigate } from 'react-router-dom';
-import { useState, useEffect } from 'react';
 
 import PortalLayout from '@/components/PortalLayout';
 import Card from '@/components/ui/Card';
@@ -16,31 +15,11 @@ import {
     Users,
     ChevronRight
 } from 'lucide-react';
-import { adminApiService } from '@/lib/adminApi';
+import { disputes } from '@/data/mockData';
 import { formatDate } from '@/lib/utils';
 
 export default function DisputeList() {
     const navigate = useNavigate();
-    const [disputes, setDisputes] = useState<any[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
-
-    useEffect(() => {
-        const fetchDisputes = async () => {
-            try {
-                setLoading(true);
-                setError(null);
-                const response = await adminApiService.getDisputes({ limit: 100 });
-                setDisputes(response.results);
-            } catch (err) {
-                setError(err instanceof Error ? err.message : 'Failed to load disputes');
-            } finally {
-                setLoading(false);
-            }
-        };
-
-        fetchDisputes();
-    }, []);
 
     const navItems = [
         { label: 'Dashboard', path: '/admin/dashboard', icon: <LayoutDashboard className="w-5 h-5" /> },
@@ -53,30 +32,8 @@ export default function DisputeList() {
         { label: 'Leads', path: '/admin/leads', icon: <Users className="w-5 h-5" /> },
     ];
 
-    const openDisputes = disputes.filter(d => d.status === 'Open' || d.status === 'open');
-    const resolvedDisputes = disputes.filter(d => d.status === 'Resolved' || d.status === 'resolved');
-
-    if (loading) {
-        return (
-            <PortalLayout title="Dispute Resolution" navItems={navItems}>
-                <div className="flex items-center justify-center py-12">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
-                    <span className="ml-3 text-gray-600 dark:text-gray-400">Loading disputes...</span>
-                </div>
-            </PortalLayout>
-        );
-    }
-
-    if (error) {
-        return (
-            <PortalLayout title="Dispute Resolution" navItems={navItems}>
-                <Card className="text-center py-12">
-                    <p className="text-red-600 dark:text-red-400 mb-4">{error}</p>
-                    <Button onClick={() => window.location.reload()}>Retry</Button>
-                </Card>
-            </PortalLayout>
-        );
-    }
+    const openDisputes = disputes.filter(d => d.status === 'Open');
+    const resolvedDisputes = disputes.filter(d => d.status === 'Resolved');
 
     return (
         <PortalLayout title="Dispute Resolution" navItems={navItems}>
@@ -125,15 +82,16 @@ export default function DisputeList() {
                                         <div className="flex-1">
                                             <div className="flex items-center space-x-2 mb-2">
                                                 <Badge variant="danger">Open</Badge>
-                                                <span className="text-sm text-gray-500 dark:text-gray-400">Job #{dispute.job_id}</span>
+                                                <span className="text-sm text-gray-500 dark:text-gray-400">Job #{dispute.jobId}</span>
                                                 <span className="text-sm text-gray-500 dark:text-gray-400">•</span>
                                                 <span className="text-sm text-gray-500 dark:text-gray-400">
-                                                    Messages: {dispute.messages_count || 0}
+                                                    By: {dispute.createdBy}
                                                 </span>
                                             </div>
-                                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">{dispute.description}</h3>
+                                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">{dispute.title}</h3>
+                                            <p className="text-sm text-gray-600 dark:text-gray-400 mb-2 line-clamp-2">{dispute.description}</p>
                                             <p className="text-xs text-gray-500 dark:text-gray-500">
-                                                Created: {formatDate(dispute.created_at || '')}
+                                                Created: {formatDate(dispute.createdDate || '')}
                                             </p>
                                         </div>
                                         <Button
@@ -161,9 +119,14 @@ export default function DisputeList() {
                                         <div className="flex-1">
                                             <div className="flex items-center space-x-2 mb-2">
                                                 <Badge variant="success">Resolved</Badge>
-                                                <span className="text-sm text-gray-500 dark:text-gray-400">Job #{dispute.job_id}</span>
+                                                <span className="text-sm text-gray-500 dark:text-gray-400">Job #{dispute.jobId}</span>
                                             </div>
-                                            <h3 className="font-semibold text-gray-900 dark:text-white mb-1">{dispute.description}</h3>
+                                            <h3 className="font-semibold text-gray-900 dark:text-white mb-1">{dispute.title}</h3>
+                                            {dispute.resolution && (
+                                                <p className="text-sm text-gray-600 dark:text-gray-400 italic">
+                                                    Resolution: {dispute.resolution}
+                                                </p>
+                                            )}
                                         </div>
                                         <Button
                                             variant="outline"

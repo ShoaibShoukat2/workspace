@@ -1,8 +1,6 @@
-import { useState, useEffect } from 'react';
 import Card from '@/components/ui/Card';
 import { AlertCircle, ExternalLink } from 'lucide-react';
 import Button from '@/components/ui/Button';
-import { customerApiService, type MaterialReference } from '@/lib/customerApi';
 
 // Using local mock data to ensure exact match with the standalone page request
 // In a real app, this would come from the API or props, but for this visual sync request we use consistent mock data.
@@ -21,50 +19,9 @@ export const MOCK_PROJECT_MATERIALS = [
     { id: '12', name: 'Utility Knife Blades', sku: 'BLD-012', quantity: 1, supplier: 'Home Depot', priceRange: '$5-7', status: 'FM Verified' },
 ];
 
-interface MaterialsReadOnlyListProps {
-    jobId?: number;
-}
-
-export default function MaterialsReadOnlyList({ jobId }: MaterialsReadOnlyListProps) {
-    const [materials, setMaterials] = useState(MOCK_PROJECT_MATERIALS);
-    const [loading, setLoading] = useState(false);
-
-    // Fetch materials from API if jobId is provided
-    useEffect(() => {
-        const fetchMaterials = async () => {
-            if (!jobId) return;
-            
-            try {
-                setLoading(true);
-                const apiMaterials = await customerApiService.getJobMaterials(jobId);
-                
-                // Transform API data to match existing UI format
-                const transformedMaterials = apiMaterials.map(material => ({
-                    id: material.id.toString(),
-                    name: material.item_name,
-                    sku: material.sku || 'N/A',
-                    quantity: material.quantity,
-                    supplier: material.supplier,
-                    priceRange: material.price_low && material.price_high 
-                        ? `$${material.price_low}-${material.price_high}`
-                        : material.price_low 
-                        ? `$${material.price_low}+`
-                        : 'Price varies',
-                    status: 'FM Verified',
-                    purchaseUrl: material.purchase_url
-                }));
-                
-                setMaterials(transformedMaterials);
-            } catch (error) {
-                console.error('Failed to fetch materials:', error);
-                // Keep using mock data on error
-            } finally {
-                setLoading(false);
-            }
-        };
-
-        fetchMaterials();
-    }, [jobId]);
+export default function MaterialsReadOnlyList() {
+    // Ignoring props to force the "sunk" (synced) state requested by user
+    const materials = MOCK_PROJECT_MATERIALS;
 
     const getSupplierInitials = (supplier: string) => {
         if (!supplier) return '??';
@@ -114,10 +71,7 @@ export default function MaterialsReadOnlyList({ jobId }: MaterialsReadOnlyListPr
                                 size="sm"
                                 variant="outline"
                                 className="h-6 px-2 text-[10px] gap-1"
-                                onClick={() => {
-                                    const url = (item as any).purchaseUrl || 'https://www.homedepot.com';
-                                    window.open(url, '_blank');
-                                }}
+                                onClick={() => window.open('https://www.homedepot.com', '_blank')}
                             >
                                 Buy <ExternalLink className="w-3 h-3" />
                             </Button>

@@ -35,6 +35,7 @@ export interface User {
     complianceStatus?: ComplianceStatus;
     insuranceExpiryDate?: string;
     avatarUrl?: string;
+    profileID?: string; // Backend profile ID from API
 }
 
 // Material interface

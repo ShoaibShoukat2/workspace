@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import PortalLayout from '@/components/PortalLayout';
 import Card from '@/components/ui/Card';
@@ -15,37 +16,12 @@ import {
     TrendingUp,
     TrendingDown
 } from 'lucide-react';
+import { contractorPayouts, materialOrders } from '@/data/mockData';
 import { formatCurrency, formatDate } from '@/lib/utils';
 
 export default function Ledger() {
+    const navigate = useNavigate();
     const { currentUser } = useAuth();
-    const [contractorPayouts, setContractorPayouts] = useState([]);
-    const [materialOrders, setMaterialOrders] = useState([]);
-    const [loading, setLoading] = useState(true);
-
-    useEffect(() => {
-        fetchLedgerData();
-    }, []);
-
-    const fetchLedgerData = async () => {
-        try {
-            const [payoutsRes, materialsRes] = await Promise.all([
-                fetch('/api/contractor-payouts/', {
-                    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-                }),
-                fetch('/api/material-orders/', {
-                    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-                })
-            ]);
-
-            if (payoutsRes.ok) setContractorPayouts(await payoutsRes.json());
-            if (materialsRes.ok) setMaterialOrders(await materialsRes.json());
-        } catch (error) {
-            console.error('Error fetching ledger data:', error);
-        } finally {
-            setLoading(false);
-        }
-    };
 
     const navItems = [
         { label: 'Dashboard', path: '/admin/dashboard', icon: <LayoutDashboard className="w-5 h-5" /> },
@@ -58,17 +34,9 @@ export default function Ledger() {
         { label: 'Leads', path: '/admin/leads', icon: <Users className="w-5 h-5" /> },
     ];
 
-    const totalPayouts = contractorPayouts.reduce((sum: number, p: any) => sum + p.amount, 0);
-    const totalMaterials = materialOrders.reduce((sum: number, m: any) => sum + m.total_cost, 0);
+    const totalPayouts = contractorPayouts.reduce((sum, p) => sum + p.amount, 0);
+    const totalMaterials = materialOrders.reduce((sum, m) => sum + m.totalCost, 0);
     const netBalance = totalPayouts + totalMaterials;
-
-    if (loading) {
-        return (
-            <PortalLayout title="Accounting Ledger" navItems={navItems}>
-                <div className="text-center py-8">Loading ledger data...</div>
-            </PortalLayout>
-        );
-    }
 
     return (
         <PortalLayout title="Accounting Ledger" navItems={navItems}>
@@ -121,16 +89,16 @@ export default function Ledger() {
                                 </tr>
                             </thead>
                             <tbody>
-                                {contractorPayouts.map((payout: any) => (
+                                {contractorPayouts.map((payout) => (
                                     <tr key={`payout-${payout.id}`} className="border-b border-gray-100 dark:border-gray-800">
                                         <td className="py-3 px-4 text-gray-600 dark:text-gray-400 text-sm">
-                                            {payout.payment_date ? formatDate(payout.payment_date) : 'Pending'}
+                                            {payout.paymentDate ? formatDate(payout.paymentDate) : 'Pending'}
                                         </td>
                                         <td className="py-3 px-4">
                                             <Badge variant="info" className="text-xs">Payout</Badge>
                                         </td>
                                         <td className="py-3 px-4 text-gray-900 dark:text-white">
-                                            Contractor Payment - Job #{payout.job_id}
+                                            Contractor Payment - Job #{payout.jobId}
                                         </td>
                                         <td className="py-3 px-4 text-right font-semibold text-red-600 dark:text-red-400">
                                             -{formatCurrency(payout.amount)}
@@ -142,19 +110,19 @@ export default function Ledger() {
                                         </td>
                                     </tr>
                                 ))}
-                                {materialOrders.map((order: any) => (
+                                {materialOrders.map((order) => (
                                     <tr key={`material-${order.id}`} className="border-b border-gray-100 dark:border-gray-800">
                                         <td className="py-3 px-4 text-gray-600 dark:text-gray-400 text-sm">
-                                            {formatDate(order.order_date)}
+                                            {formatDate(order.orderDate)}
                                         </td>
                                         <td className="py-3 px-4">
                                             <Badge variant="default" className="text-xs">Materials</Badge>
                                         </td>
                                         <td className="py-3 px-4 text-gray-900 dark:text-white">
-                                            Material Order - Job #{order.job_id}
+                                            Material Order - Job #{order.jobId}
                                         </td>
                                         <td className="py-3 px-4 text-right font-semibold text-red-600 dark:text-red-400">
-                                            -{formatCurrency(order.total_cost)}
+                                            -{formatCurrency(order.totalCost)}
                                         </td>
                                         <td className="py-3 px-4 text-center">
                                             <Badge variant={order.status === 'Delivered' ? 'success' : 'warning'} className="text-xs">

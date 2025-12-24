@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
+import { customerApi } from '@/services/customerApi';
 import Button from '@/components/ui/Button';
-import { customerApiService } from '@/lib/customerApi';
 import { MapContainer, TileLayer, Marker, Popup, Polyline } from 'react-leaflet';
 import { Icon, divIcon } from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -55,95 +55,49 @@ interface CustomerTrackerProps {
 
 export default function CustomerTracker({ jobId: propJobId, embed = false, onlyMap = false }: CustomerTrackerProps) {
     const { jobId: paramJobId } = useParams();
-    // Prefer prop, then param, then fallback
     const resolvedJobId = propJobId || (paramJobId ? Number(paramJobId) : undefined);
+    
     const [job, setJob] = useState<any>(null);
+    const [contractorLocation, setContractorLocation] = useState<any>(null);
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
 
     const [status, setStatus] = useState<'En Route' | 'Arrived' | 'InProgress' | 'Complete'>('En Route');
     const [eta, setEta] = useState('12 mins');
     const [techLocation, setTechLocation] = useState<[number, number]>([38.9072, -77.0369]); // Washington DC
     const [destLocation] = useState<[number, number]>([38.9022, -77.0319]); // Nearby
     const [bearing, setBearing] = useState(180);
-    const [trackingData, setTrackingData] = useState<any>(null);
 
-    // Fetch job data
     useEffect(() => {
         if (resolvedJobId) {
-            fetchJobData();
+            loadJobData();
         }
     }, [resolvedJobId]);
 
-    const fetchJobData = async () => {
+    const loadJobData = async () => {
         try {
-            const response = await fetch(`/api/jobs/${resolvedJobId}/`, {
-                headers: {
-                    'Authorization': `Bearer ${localStorage.getItem('token')}`
-                }
-            });
-            if (response.ok) {
-                const jobData = await response.json();
-                setJob(jobData);
+            setLoading(true);
+            setError(null);
+            
+            const [jobData, locationData] = await Promise.all([
+                customerApi.getJob(resolvedJobId!),
+                customerApi.getContractorLocation(resolvedJobId!)
+            ]);
+            
+            setJob(jobData);
+            setContractorLocation(locationData);
+            
+            // Update tech location if available from API
+            if (locationData.latitude && locationData.longitude) {
+                setTechLocation([locationData.latitude, locationData.longitude]);
             }
-        } catch (error) {
-            console.error('Error fetching job data:', error);
+        } catch (err: any) {
+            console.error('Failed to load job data:', err);
+            setError('Failed to load job tracking data.');
         } finally {
             setLoading(false);
         }
     };
-
-    // Fetch live tracking data from API
-    useEffect(() => {
-        const fetchTrackingData = async () => {
-            if (!resolvedJobId) return;
-            
-            try {
-                const data = await customerApiService.getLiveTracking(resolvedJobId);
-                setTrackingData(data);
-                
-                // Update location if available
-                if (data.contractor_location?.latitude && data.contractor_location?.longitude) {
-                    setTechLocation([data.contractor_location.latitude, data.contractor_location.longitude]);
-                }
-                
-                // Update destination if available
-                if (data.job_location?.latitude && data.job_location?.longitude) {
-                    // destLocation would be updated here if it was state
-                }
-                
-                // Update status based on API data
-                if (data.status) {
-                    const statusMap: any = {
-                        'en_route': 'En Route',
-                        'EN_ROUTE': 'En Route',
-                        'arrived': 'Arrived',
-                        'ARRIVED': 'Arrived',
-                        'in_progress': 'InProgress',
-                        'IN_PROGRESS': 'InProgress',
-                        'completed': 'Complete',
-                        'COMPLETED': 'Complete'
-                    };
-                    setStatus(statusMap[data.status] || 'En Route');
-                }
-                
-                // Update ETA if available
-                if (data.eta_minutes) {
-                    setEta(`${data.eta_minutes} mins`);
-                } else if (data.eta) {
-                    setEta(data.eta);
-                }
-            } catch (error) {
-                console.error('Failed to fetch tracking data:', error);
-                // Continue with mock data for demo purposes
-            }
-        };
-
-        fetchTrackingData();
-        
-        // Poll for updates every 10 seconds
-        const interval = setInterval(fetchTrackingData, 10000);
-        return () => clearInterval(interval);
-    }, [resolvedJobId]);
 
     // Simulate movement
     useEffect(() => {
@@ -198,27 +152,6 @@ export default function CustomerTracker({ jobId: propJobId, embed = false, onlyM
         iconSize: [40, 40],
         iconAnchor: [20, 20],
     });
-
-    if (loading) {
-        return (
-            <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
-                <div className="text-center">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-                    <p className="text-gray-600 dark:text-gray-400">Loading job details...</p>
-                </div>
-            </div>
-        );
-    }
-
-    if (!job) {
-        return (
-            <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
-                <div className="text-center">
-                    <p className="text-gray-600 dark:text-gray-400">Job not found</p>
-                </div>
-            </div>
-        );
-    }
 
     return (
         <div className={`${embed ? 'h-full flex flex-col md:flex-row' : 'min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col md:flex-row'}`}>
@@ -280,7 +213,7 @@ export default function CustomerTracker({ jobId: propJobId, embed = false, onlyM
                     <div className="mb-8 flex flex-row md:flex-col lg:flex-row items-center gap-4 text-center md:text-left">
                         <div className="relative flex-shrink-0">
                             <div className="w-16 h-16 md:w-20 md:h-20 rounded-full bg-gray-200 overflow-hidden border-4 border-white dark:border-gray-800 shadow-lg">
-                                <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${job?.trade}`} alt="Tech" className="w-full h-full object-cover" />
+                                <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${job.trade}`} alt="Tech" className="w-full h-full object-cover" />
                             </div>
                             <div className="absolute -bottom-1 -right-1 bg-green-500 text-white p-1 rounded-full border-2 border-white dark:border-gray-800">
                                 <Shield className="w-3 h-3 md:w-4 md:h-4" />
@@ -288,14 +221,10 @@ export default function CustomerTracker({ jobId: propJobId, embed = false, onlyM
                         </div>
                         <div>
                             <div className="text-xs text-gray-400 font-bold mb-1 uppercase tracking-widest">Your Professional</div>
-                            <h3 className="text-xl md:text-2xl font-bold text-gray-900 dark:text-white">
-                                {trackingData?.contractor?.name || 'Alex M.'}
-                            </h3>
+                            <h3 className="text-xl md:text-2xl font-bold text-gray-900 dark:text-white">Alex M.</h3>
                             <div className="flex items-center justify-center md:justify-start gap-1 text-yellow-500 mt-1">
                                 <Star className="w-4 h-4 fill-current" />
-                                <span className="font-bold text-black dark:text-white">
-                                    {trackingData?.contractor?.rating || 4.9}
-                                </span>
+                                <span className="font-bold text-black dark:text-white">4.9</span>
                                 <span className="text-gray-400 text-sm">(128 Jobs)</span>
                             </div>
                         </div>
@@ -319,7 +248,7 @@ export default function CustomerTracker({ jobId: propJobId, embed = false, onlyM
                                 <MapPin className="w-4 h-4 text-gray-400" />
                                 Destination
                             </h4>
-                            <p className="text-gray-600 dark:text-gray-400 ml-6 text-sm">{job?.property_address}</p>
+                            <p className="text-gray-600 dark:text-gray-400 ml-6 text-sm">{job.propertyAddress}</p>
                         </div>
 
                         <div>
@@ -337,7 +266,7 @@ export default function CustomerTracker({ jobId: propJobId, embed = false, onlyM
                             </h4>
                             <div className="ml-6 bg-gray-50 dark:bg-gray-800 p-4 rounded-xl border border-gray-100 dark:border-gray-700">
                                 <div className="flex justify-between items-start mb-2">
-                                    <span className="font-medium text-gray-900 dark:text-white capitalize">{job?.trade} Service</span>
+                                    <span className="font-medium text-gray-900 dark:text-white capitalize">{job.trade} Service</span>
                                     <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-bold">PRO</span>
                                 </div>
                                 <p className="text-sm text-gray-500 mb-3">Standard service call including assessment.</p>
@@ -351,8 +280,8 @@ export default function CustomerTracker({ jobId: propJobId, embed = false, onlyM
                                 Materials (Provided)
                             </h4>
                             <div className="ml-6 space-y-3">
-                                {job?.materials && job.materials.length > 0 ? (
-                                    job.materials.map((mat: any) => (
+                                {job.materials && job.materials.length > 0 ? (
+                                    job.materials.map((mat) => (
                                         <div key={mat.id} className="bg-white dark:bg-gray-800 p-3 rounded-lg border border-gray-100 dark:border-gray-700 flex justify-between items-center shadow-sm">
                                             <div>
                                                 <p className="text-sm font-medium text-gray-900 dark:text-white">{mat.name}</p>

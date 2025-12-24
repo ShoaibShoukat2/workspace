@@ -79,6 +79,7 @@ export default {
                 'slide-in': 'slideIn 0.3s ease-out',
                 'scale-in': 'scaleIn 0.2s ease-out',
                 'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                'dash': 'dash 30s linear infinite',
             },
             keyframes: {
                 fadeIn: {
@@ -92,6 +93,9 @@ export default {
                 scaleIn: {
                     '0%': { transform: 'scale(0.95)', opacity: '0' },
                     '100%': { transform: 'scale(1)', opacity: '1' },
+                },
+                dash: {
+                    'to': { strokeDashoffset: '-1000' },
                 },
             },
         },

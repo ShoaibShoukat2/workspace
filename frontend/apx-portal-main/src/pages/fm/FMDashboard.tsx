@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
+import { fmApi } from '@/services/fmApi';
 import PortalLayout from '@/components/PortalLayout';
 import Card from '@/components/ui/Card';
 import Badge, { getStatusBadgeVariant } from '@/components/ui/Badge';
@@ -15,51 +16,54 @@ import {
     Calendar,
     Clock,
     ChevronRight,
-    AlertCircle,
-    Loader2
+    AlertCircle
 } from 'lucide-react';
-import { fmApiService } from '@/lib/fmApi';
 
 export default function FMDashboard() {
     const navigate = useNavigate();
-    const { user } = useAuth();
+    const { currentUser } = useAuth();
     const [viewMode, setViewMode] = useState<'map' | 'list'>('list');
     
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
     const [dashboardData, setDashboardData] = useState<any>(null);
     const [jobs, setJobs] = useState<any[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
-        const fetchDashboardData = async () => {
-            try {
-                setLoading(true);
-                setError(null);
-
-                const [dashboard, jobsData] = await Promise.all([
-                    fmApiService.getDashboard(),
-                    fmApiService.getJobs({ limit: 20 })
-                ]);
-
-                setDashboardData(dashboard);
-                setJobs(jobsData.results || jobsData);
-            } catch (err) {
-                console.error('Failed to fetch FM dashboard data:', err);
-                setError(err instanceof Error ? err.message : 'Failed to load dashboard data');
-            } finally {
-                setLoading(false);
-            }
-        };
-
-        fetchDashboardData();
+        loadDashboardData();
     }, []);
+
+    const loadDashboardData = async () => {
+        try {
+            setLoading(true);
+            setError(null);
+            
+            const [dashboard, assignedJobs] = await Promise.all([
+                fmApi.getDashboard(),
+                fmApi.getAssignedJobs()
+            ]);
+            
+            setDashboardData(dashboard);
+            setJobs(assignedJobs.jobs || []);
+        } catch (err: any) {
+            console.error('Failed to load dashboard data:', err);
+            setError('Failed to load dashboard data. Please try again.');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const navItems = [
+        { label: 'Dashboard', path: '/fm/dashboard', icon: <LayoutDashboard className="w-5 h-5" /> },
+        { label: 'Site Visits', path: '/fm/dashboard', icon: <ClipboardList className="w-5 h-5" /> },
+        { label: 'Change Orders', path: '/fm/dashboard', icon: <FileEdit className="w-5 h-5" /> },
+    ];
 
     if (loading) {
         return (
             <PortalLayout title="Field Manager Dashboard" navItems={navItems}>
                 <div className="flex items-center justify-center h-64">
-                    <Loader2 className="w-8 h-8 animate-spin text-purple-600" />
-                    <span className="ml-2 text-gray-600">Loading dashboard...</span>
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
                 </div>
             </PortalLayout>
         );
@@ -68,33 +72,23 @@ export default function FMDashboard() {
     if (error) {
         return (
             <PortalLayout title="Field Manager Dashboard" navItems={navItems}>
-                <div className="flex items-center justify-center h-64">
-                    <div className="text-center">
-                        <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
-                        <p className="text-red-600 mb-4">{error}</p>
-                        <Button onClick={() => window.location.reload()}>Retry</Button>
-                    </div>
+                <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
+                    <p className="text-red-700 dark:text-red-400">{error}</p>
+                    <button 
+                        onClick={loadDashboardData}
+                        className="mt-2 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
+                    >
+                        Retry
+                    </button>
                 </div>
             </PortalLayout>
         );
     }
 
-    const navItems = [
-        { label: 'Dashboard', path: '/fm/dashboard', icon: <LayoutDashboard className="w-5 h-5" /> },
-        { label: 'Site Visits', path: '/fm/dashboard', icon: <ClipboardList className="w-5 h-5" /> },
-        { label: 'Change Orders', path: '/fm/dashboard', icon: <FileEdit className="w-5 h-5" /> },
-    ];
-
-    // Get jobs for FM (all pending and assigned jobs)
-    const myJobs = jobs.filter(j =>
-        j.status === 'Open' || j.status === 'open' ||
-        j.status === 'InProgress' || j.status === 'in_progress' ||
-        j.status === 'Complete' || j.status === 'completed'
-    );
-
-    const pendingVisits = dashboardData?.pending_visits || myJobs.filter(j => j.status === 'Open' || j.status === 'open').length;
-    const activeJobs = dashboardData?.active_jobs || myJobs.filter(j => j.status === 'InProgress' || j.status === 'in_progress').length;
-    const completedToday = dashboardData?.completed_today || myJobs.filter(j => j.status === 'Complete' || j.status === 'completed').length;
+    // Extract data from API response with fallbacks
+    const pendingVisits = dashboardData?.pending_visits || 0;
+    const activeJobs = dashboardData?.active_jobs || 0;
+    const completedToday = dashboardData?.completed_today || 0;
 
     return (
         <PortalLayout title="Field Manager Dashboard" navItems={navItems}>
@@ -105,7 +99,7 @@ export default function FMDashboard() {
                         <div className="flex items-center justify-between">
                             <div>
                                 <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Pending Visits</p>
-                                <p className="text-3xl font-bold text-gray-900 dark:text-white">{pendingVisits}</p>
+                                <p className="text-3xl font-bold text-gray-900 dark:text-white">{pendingVisits.length}</p>
                             </div>
                             <div className="w-14 h-14 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
                                 <Calendar className="w-7 h-7 text-blue-600 dark:text-blue-400" />
@@ -117,7 +111,7 @@ export default function FMDashboard() {
                         <div className="flex items-center justify-between">
                             <div>
                                 <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Active Jobs</p>
-                                <p className="text-3xl font-bold text-gray-900 dark:text-white">{activeJobs}</p>
+                                <p className="text-3xl font-bold text-gray-900 dark:text-white">{activeJobs.length}</p>
                             </div>
                             <div className="w-14 h-14 rounded-full bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center">
                                 <Clock className="w-7 h-7 text-purple-600 dark:text-purple-400" />
@@ -129,7 +123,7 @@ export default function FMDashboard() {
                         <div className="flex items-center justify-between">
                             <div>
                                 <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Completed Today</p>
-                                <p className="text-3xl font-bold text-gray-900 dark:text-white">{completedToday}</p>
+                                <p className="text-3xl font-bold text-gray-900 dark:text-white">{completedToday.length}</p>
                             </div>
                             <div className="w-14 h-14 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
                                 <ClipboardList className="w-7 h-7 text-green-600 dark:text-green-400" />
@@ -196,10 +190,10 @@ export default function FMDashboard() {
                                             <div className="flex items-start justify-between mb-2">
                                                 <div>
                                                     <h3 className="font-semibold text-gray-900 dark:text-white text-lg">
-                                                        {job.property_address || job.propertyAddress}
+                                                        {job.propertyAddress}
                                                     </h3>
                                                     <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                                                        {job.customer_name || job.customerName} • {job.trade}
+                                                        {job.customerName} • {job.trade}
                                                     </p>
                                                 </div>
                                                 <Badge variant={getStatusBadgeVariant(job.status)}>
@@ -210,53 +204,53 @@ export default function FMDashboard() {
                                             <div className="flex flex-wrap items-center gap-2 mt-3 text-sm">
                                                 <div className="flex items-center space-x-2 text-gray-600 dark:text-gray-400">
                                                     <MapPin className="w-4 h-4 text-blue-500" />
-                                                    <span>{job.city || job.location}</span>
+                                                    <span>{job.city}</span>
                                                 </div>
 
                                                 {/* Mandatory Site Visit Badge */}
-                                                {(job.mandatory_site_visit || job.mandatorySiteVisit) && (
+                                                {job.mandatorySiteVisit && (
                                                     <Badge variant="warning" className="text-xs bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-700">
                                                         MANDATORY VISIT
                                                     </Badge>
                                                 )}
 
                                                 {/* Visit Status Badge */}
-                                                {(job.visit_status || job.visitStatus) && (
+                                                {job.visitStatus && (
                                                     <Badge
                                                         variant={
-                                                            (job.visit_status || job.visitStatus) === 'Completed' || (job.visit_status || job.visitStatus) === 'completed' ? 'success' :
-                                                                (job.visit_status || job.visitStatus) === 'InProgress' || (job.visit_status || job.visitStatus) === 'in_progress' ? 'info' : 'default'
+                                                            job.visitStatus === 'Completed' ? 'success' :
+                                                                job.visitStatus === 'InProgress' ? 'info' : 'default'
                                                         }
                                                         className="text-xs"
                                                     >
-                                                        {job.visit_status || job.visitStatus}
+                                                        {job.visitStatus}
                                                     </Badge>
                                                 )}
 
                                                 {/* Material Status Badge */}
-                                                {(job.material_status || job.materialStatus) && (
+                                                {job.materialStatus && (
                                                     <Badge
                                                         variant={
-                                                            (job.material_status || job.materialStatus) === 'Issues Found' ? 'danger' :
-                                                                (job.material_status || job.materialStatus) === 'FM Verified' ? 'success' :
-                                                                    (job.material_status || job.materialStatus) === 'AI Generated' ? 'info' : 'warning'
+                                                            job.materialStatus === 'Issues Found' ? 'danger' :
+                                                                job.materialStatus === 'FM Verified' ? 'success' :
+                                                                    job.materialStatus === 'AI Generated' ? 'info' : 'warning'
                                                         }
                                                         className="text-xs flex items-center gap-1"
                                                     >
-                                                        {(job.material_status || job.materialStatus) === 'Issues Found' && <AlertCircle className="w-3 h-3" />}
-                                                        {job.material_status || job.materialStatus}
+                                                        {job.materialStatus === 'Issues Found' && <AlertCircle className="w-3 h-3" />}
+                                                        {job.materialStatus}
                                                     </Badge>
                                                 )}
 
                                                 {/* Material Alert */}
-                                                {(job.material_status || job.materialStatus) === 'Issues Found' && (
+                                                {job.materialStatus === 'Issues Found' && (
                                                     <div className="flex items-center space-x-1 text-red-600 dark:text-red-400 text-xs">
                                                         <AlertCircle className="w-3 h-3" />
                                                         <span>Materials need attention</span>
                                                     </div>
                                                 )}
 
-                                                {(job.is_project || job.isProject) && (
+                                                {job.isProject && (
                                                     <Badge variant="info" className="text-xs">
                                                         PROJECT
                                                     </Badge>

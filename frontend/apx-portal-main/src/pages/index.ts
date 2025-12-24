@@ -1,11 +1,5 @@
 // Placeholder pages - will be implemented progressively
 
-// Authentication pages
-export { default as Login } from './Login';
-export { default as Register } from './Register';
-export { default as ForgotPassword } from './ForgotPassword';
-export { default as ResetPassword } from './ResetPassword';
-
 export { default as ContractorDashboard } from './contractor/ContractorDashboard';
 export { default as ComplianceHub } from './contractor/ComplianceHub';
 export { default as JobBoard } from './contractor/JobBoard';

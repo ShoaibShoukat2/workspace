@@ -19,7 +19,7 @@ import {
     Package,
     CheckCircle
 } from 'lucide-react';
-import { fmApiService } from '@/lib/fmApi';
+import { getJobById, updateJobField, createEstimate } from '@/data/mockData';
 import { formatCurrency } from '@/lib/utils';
 import { Material } from '@/types';
 import AIGeneratedMaterials from './AIGeneratedMaterials';
@@ -39,12 +39,9 @@ export default function FMJobVisit() {
     useAuth();
 
     const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
-    const [job, setJob] = useState<any>(null);
-    const [siteVisit, setSiteVisit] = useState<any>(null);
+    const [job, setJob] = useState<any>(undefined);
     const [activeTab, setActiveTab] = useState<TabType>('visit');
     const [signatureSaved, setSignatureSaved] = useState(false);
-    const [processing, setProcessing] = useState(false);
 
     // Visit Form State
     const [measurements, setMeasurements] = useState({ display: '', verified: false });
@@ -54,55 +51,23 @@ export default function FMJobVisit() {
     const [laborRequired, setLaborRequired] = useState(1);
     const [estimatedTime, setEstimatedTime] = useState(4);
     const [safetyConcerns, setSafetyConcerns] = useState('');
-    const [materials, setMaterials] = useState<Material[]>([]);
+    const [materials, setMaterials] = useState<Material[]>(MOCK_AI_MATERIALS);
     const [showMaterialModal, setShowMaterialModal] = useState(false);
 
-    useEffect(() => {
-        const fetchJobData = async () => {
-            if (!jobId) return;
-            
-            try {
-                setLoading(true);
-                setError(null);
-                
-                const [jobData, visitData] = await Promise.all([
-                    fmApiService.getJobDetail(Number(jobId)),
-                    fmApiService.getSiteVisit(Number(jobId)).catch(() => null) // Visit might not exist yet
-                ]);
-                
-                setJob(jobData);
-                setSiteVisit(visitData);
-                
-                // Load existing visit data if available
-                if (visitData) {
-                    setMeasurements(visitData.measurements || { display: '', verified: false });
-                    setScopeConfirmed(visitData.scope_confirmed || false);
-                    setBeforePhotosUploaded(visitData.photos_count > 0);
-                    setToolsRequired(visitData.tools_required || []);
-                    setLaborRequired(visitData.labor_required || 1);
-                    setEstimatedTime(visitData.estimated_time || 4);
-                    setSafetyConcerns(visitData.safety_concerns || '');
-                    setSignatureSaved(visitData.customer_signed || false);
-                }
-                
-                // Generate AI materials if not already done
-                if (!materials.length) {
-                    try {
-                        const materialsResponse = await fmApiService.generateMaterials(Number(jobId));
-                        setMaterials(materialsResponse.materials || []);
-                    } catch (err) {
-                        console.log('No AI materials available');
-                    }
-                }
-                
-            } catch (err) {
-                setError(err instanceof Error ? err.message : 'Failed to load job data');
-            } finally {
-                setLoading(false);
-            }
-        };
+    // Quote State
 
-        fetchJobData();
+
+    useEffect(() => {
+        if (jobId) {
+            const j = getJobById(Number(jobId));
+            if (j) {
+                setJob(j);
+                if (j.materials && j.materials.length > 0) {
+                    setMaterials(j.materials);
+                }
+            }
+            setLoading(false);
+        }
     }, [jobId]);
 
     const calculateProgress = () => {
@@ -124,111 +89,35 @@ export default function FMJobVisit() {
     const progress = calculateProgress();
     const isVisitComplete = progress.completed === progress.total;
 
-    const handleMaterialsSave = async (updatedMaterials: Material[]) => {
-        try {
-            setProcessing(true);
-            const verifiedMaterials = updatedMaterials.map(m => ({ ...m, status: 'FM Verified' as const }));
-            
-            await fmApiService.verifyMaterials(Number(jobId), verifiedMaterials);
-            setMaterials(verifiedMaterials);
-            setShowMaterialModal(false);
-        } catch (err) {
-            alert('Failed to save materials');
-        } finally {
-            setProcessing(false);
-        }
+    const handleMaterialsSave = (updatedMaterials: Material[]) => {
+        const verifiedMaterials = updatedMaterials.map(m => ({ ...m, status: 'FM Verified' as const }));
+        setMaterials(verifiedMaterials);
+        setShowMaterialModal(false);
+        // Persist to mock data (in memory)
+        updateJobField(Number(jobId), 'materials', verifiedMaterials);
+        updateJobField(Number(jobId), 'materialStatus', 'FM Verified');
     };
 
-    const handlePhotoUpload = async () => {
-        try {
-            // Create a file input for upload
-            const input = document.createElement('input');
-            input.type = 'file';
-            input.accept = 'image/*';
-            input.multiple = true;
-            
-            input.onchange = async (e) => {
-                const files = (e.target as HTMLInputElement).files;
-                if (!files || files.length === 0) return;
-
-                const formData = new FormData();
-                Array.from(files).forEach((file, index) => {
-                    formData.append(`photo_${index}`, file);
-                });
-
-                try {
-                    setProcessing(true);
-                    await fmApiService.uploadSiteVisitPhoto(Number(jobId), formData);
-                    setBeforePhotosUploaded(true);
-                    alert('Photos uploaded successfully!');
-                } catch (err) {
-                    alert('Failed to upload photos');
-                } finally {
-                    setProcessing(false);
-                }
-            };
-            
-            input.click();
-        } catch (err) {
-            alert('Failed to upload photos');
-        }
-    };
-
-    const handleSubmitVisit = async () => {
+    const handleSubmitVisit = () => {
         if (!isVisitComplete) return;
 
-        try {
-            setProcessing(true);
-            
-            const visitData = {
-                measurements,
-                scope_confirmed: scopeConfirmed,
-                tools_required: toolsRequired,
-                labor_required: laborRequired,
-                estimated_time: estimatedTime,
-                safety_concerns: safetyConcerns,
-                customer_signed: signatureSaved,
-                photos_uploaded: beforePhotosUploaded
-            };
+        updateJobField(Number(jobId), 'status', 'InProgress');
+        updateJobField(Number(jobId), 'visitStatus', 'Completed');
 
-            if (siteVisit) {
-                await fmApiService.updateSiteVisit(Number(jobId), visitData);
-                await fmApiService.completeSiteVisit(Number(jobId));
-            } else {
-                await fmApiService.startSiteVisit(Number(jobId), visitData);
-                await fmApiService.completeSiteVisit(Number(jobId));
-            }
+        // Also save mandatory fields to job object for peristence
+        updateJobField(Number(jobId), 'measurements', measurements);
+        updateJobField(Number(jobId), 'toolsRequired', toolsRequired);
+        updateJobField(Number(jobId), 'laborRequired', laborRequired);
+        updateJobField(Number(jobId), 'estimatedTime', estimatedTime);
+        updateJobField(Number(jobId), 'safetyConcerns', safetyConcerns);
+        updateJobField(Number(jobId), 'scopeConfirmed', scopeConfirmed);
+        updateJobField(Number(jobId), 'beforePhotosUploaded', beforePhotosUploaded);
 
-            alert('Site visit submitted successfully!');
-            navigate('/fm/dashboard');
-        } catch (err) {
-            alert('Failed to submit site visit');
-        } finally {
-            setProcessing(false);
-        }
+        alert('Site visit submitted successfully through the new secure flow.');
+        navigate('/fm/dashboard');
     };
 
-    if (loading) {
-        return (
-            <PortalLayout title="Loading..." navItems={navItems}>
-                <div className="flex items-center justify-center py-12">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
-                    <span className="ml-3 text-gray-600 dark:text-gray-400">Loading job details...</span>
-                </div>
-            </PortalLayout>
-        );
-    }
-
-    if (error || !job) {
-        return (
-            <PortalLayout title="Job Not Found" navItems={navItems}>
-                <Card className="text-center py-12">
-                    <p className="text-red-600 dark:text-red-400 mb-4">{error || "Job not found."}</p>
-                    <Button onClick={() => navigate('/fm/dashboard')}>Back to Dashboard</Button>
-                </Card>
-            </PortalLayout>
-        );
-    }
+    if (loading || !job) return <PortalLayout title="Loading..." navItems={[]}><div className="p-8">Loading...</div></PortalLayout>;
 
     const navItems = [
         { label: 'Dashboard', path: '/fm/dashboard', icon: <LayoutDashboard className="w-5 h-5" /> },
@@ -243,8 +132,8 @@ export default function FMJobVisit() {
                 <Card className="bg-gradient-to-r from-gray-900 to-gray-800 text-white border-0">
                     <div className="flex items-center justify-between mb-2">
                         <div>
-                            <h2 className="text-2xl font-bold">{job.customer_name}'s Property</h2>
-                            <p className="text-gray-400">{job.title} • {job.location}</p>
+                            <h2 className="text-2xl font-bold">{job.customerName}'s Property</h2>
+                            <p className="text-gray-400">{job.type} Job • {job.trade}</p>
                         </div>
                         <Badge variant={getStatusBadgeVariant(job.status)}>{job.status}</Badge>
                     </div>
@@ -297,7 +186,7 @@ export default function FMJobVisit() {
                                     <h3 className="font-semibold text-lg dark:text-white">Before Photos</h3>
                                 </div>
                                 <div className="space-y-3">
-                                    <div className="border-2 border-dashed border-gray-300 dark:border-gray-700 rounded-xl p-6 text-center hover:bg-gray-50 dark:hover:bg-gray-800/50 cursor-pointer transition-colors" onClick={handlePhotoUpload}>
+                                    <div className="border-2 border-dashed border-gray-300 dark:border-gray-700 rounded-xl p-6 text-center hover:bg-gray-50 dark:hover:bg-gray-800/50 cursor-pointer transition-colors" onClick={() => setBeforePhotosUploaded(true)}>
                                         <Camera className="w-8 h-8 mx-auto text-gray-400 mb-2" />
                                         <p className="text-sm text-gray-500">Tap to upload photos</p>
                                     </div>
@@ -449,49 +338,36 @@ export default function FMJobVisit() {
                                         <span>Total</span>
                                         <span className="text-purple-600">$770.00</span>
                                     </div>
-                                    <Button className="mt-6" onClick={async () => {
-                                        try {
-                                            setProcessing(true);
-                                            
-                                            // Create line items from verified materials and labor
-                                            const materialLineItems = materials
-                                                .filter(m => m.status === 'FM Verified')
-                                                .map(m => ({
-                                                    description: m.name,
-                                                    quantity: m.quantity,
-                                                    unit_price: 50, // Mock rate, should be dynamic
-                                                }));
+                                    <Button className="mt-6" onClick={() => {
+                                        // 1. Create/Update Estimate in the system
+                                        // Create line items from verified materials and labor
+                                        const materialLineItems = materials
+                                            .filter(m => m.status === 'FM Verified')
+                                            .map(m => ({
+                                                description: m.name,
+                                                category: 'Material',
+                                                quantity: m.quantity,
+                                                rate: 50, // Mock rate, should be dynamic
+                                                total: m.quantity * 50
+                                            }));
 
-                                            const laborLineItems = [{
-                                                description: `Labor (${estimatedTime} hours)`,
-                                                quantity: estimatedTime,
-                                                unit_price: 80, // Mock hourly rate
-                                            }];
+                                        const laborLineItems = [{
+                                            description: `Labor (${estimatedTime} hours)`,
+                                            category: 'Labor',
+                                            quantity: estimatedTime,
+                                            rate: 80, // Mock hourly rate
+                                            total: estimatedTime * 80
+                                        }];
 
-                                            const estimateData = {
-                                                line_items: [...materialLineItems, ...laborLineItems],
-                                                notes: 'Auto-generated from site visit'
-                                            };
+                                        const newEstimate = createEstimate(job.id, [...materialLineItems, ...laborLineItems]);
 
-                                            const newEstimate = await fmApiService.createEstimate(Number(jobId), estimateData);
-                                            
-                                            // Generate magic link
-                                            const magicLink = `${window.location.origin}/quote/${job.magic_token || 'mock-token-123'}`;
-                                            navigator.clipboard.writeText(magicLink);
-                                            
-                                            alert(`Estimate #${newEstimate.id} Created & Magic Link Copied!\n\n${magicLink}\n\nShare this with the customer to approve.`);
-                                        } catch (err) {
-                                            alert('Failed to create estimate');
-                                        } finally {
-                                            setProcessing(false);
-                                        }
-                                    }} disabled={processing}>
+                                        // 2. Generate Link
+                                        const magicLink = `${window.location.origin}/quote/${job.magicToken || 'mock-token-123'}`;
+                                        navigator.clipboard.writeText(magicLink);
+                                        alert(`Estimate #${newEstimate.id} Created & Magic Link Copied!\n\n${magicLink}\n\nShare this with the customer to approve.`);
+                                    }}>
                                         <div className="flex items-center">
-                                            {processing ? (
-                                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                                            ) : (
-                                                <Send className="w-4 h-4 mr-2" />
-                                            )}
+                                            <Send className="w-4 h-4 mr-2" />
                                             Generate Quote & Copy Link
                                         </div>
                                     </Button>
@@ -523,7 +399,7 @@ export default function FMJobVisit() {
                                         {signatureSaved ? (
                                             <div className="text-center">
                                                 <CheckCircle className="w-10 h-10 mx-auto mb-2" />
-                                                <span className="font-bold text-lg">Signed by {job.customer_name}</span>
+                                                <span className="font-bold text-lg">Signed by {job.customerName}</span>
                                             </div>
                                         ) : (
                                             <div className="text-center text-gray-400">
@@ -563,12 +439,9 @@ export default function FMJobVisit() {
                         <Button
                             variant="primary"
                             className="flex-1 sm:flex-none"
-                            disabled={!isVisitComplete || processing}
+                            disabled={!isVisitComplete}
                             onClick={handleSubmitVisit}
                         >
-                            {processing ? (
-                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                            ) : null}
                             Submit Visit
                             <Send className="w-4 h-4 ml-2" />
                         </Button>

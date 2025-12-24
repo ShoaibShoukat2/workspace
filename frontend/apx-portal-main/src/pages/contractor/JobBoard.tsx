@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
+import { contractorApi } from '@/services/contractorApi';
 import PortalLayout from '@/components/PortalLayout';
 import Card from '@/components/ui/Card';
 import Badge, { getStatusBadgeVariant } from '@/components/ui/Badge';
@@ -15,74 +16,48 @@ import {
     MapPin,
     Clock,
     DollarSign,
-    Package,
-    Loader2,
-    AlertCircle
+    Package
 } from 'lucide-react';
 import SupportFloatingButton from '@/components/contractor/SupportFloatingButton';
-import { contractorApiService } from '@/lib/contractorApi';
 import { formatCurrency } from '@/lib/utils';
 
 export default function JobBoard() {
     const navigate = useNavigate();
-    const { user } = useAuth();
+    const { currentUser } = useAuth();
     const [filterStatus, setFilterStatus] = useState<'all' | 'available' | 'inprogress' | 'completed'>('available');
     const [filterCity, setFilterCity] = useState('all');
     
+    const [availableJobs, setAvailableJobs] = useState<any[]>([]);
+    const [myActiveJobs, setMyActiveJobs] = useState<any[]>([]);
+    const [myCompletedJobs, setMyCompletedJobs] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    const [assignments, setAssignments] = useState<any[]>([]);
-    const [activeJobs, setActiveJobs] = useState<any[]>([]);
-    const [processing, setProcessing] = useState<number | null>(null);
 
     useEffect(() => {
-        const fetchJobs = async () => {
-            try {
-                setLoading(true);
-                setError(null);
-
-                const [assignmentsData, activeJobsData] = await Promise.all([
-                    contractorApiService.getAssignments(),
-                    contractorApiService.getActiveJobs()
-                ]);
-
-                setAssignments(assignmentsData.results || assignmentsData);
-                setActiveJobs(activeJobsData.results || activeJobsData);
-            } catch (err) {
-                console.error('Failed to fetch job board data:', err);
-                setError(err instanceof Error ? err.message : 'Failed to load jobs');
-            } finally {
-                setLoading(false);
-            }
-        };
-
-        fetchJobs();
+        loadJobs();
     }, []);
 
-    if (loading) {
-        return (
-            <PortalLayout title="Job Board" navItems={navItems}>
-                <div className="flex items-center justify-center h-64">
-                    <Loader2 className="w-8 h-8 animate-spin text-purple-600" />
-                    <span className="ml-2 text-gray-600">Loading jobs...</span>
-                </div>
-            </PortalLayout>
-        );
-    }
-
-    if (error) {
-        return (
-            <PortalLayout title="Job Board" navItems={navItems}>
-                <div className="flex items-center justify-center h-64">
-                    <div className="text-center">
-                        <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
-                        <p className="text-red-600 mb-4">{error}</p>
-                        <Button onClick={() => window.location.reload()}>Retry</Button>
-                    </div>
-                </div>
-            </PortalLayout>
-        );
-    }
+    const loadJobs = async () => {
+        try {
+            setLoading(true);
+            setError(null);
+            
+            const [available, active, completed] = await Promise.all([
+                contractorApi.getAvailableJobs(),
+                contractorApi.getMyJobs({ status: 'active' }),
+                contractorApi.getMyJobs({ status: 'completed' })
+            ]);
+            
+            setAvailableJobs(available.jobs || []);
+            setMyActiveJobs(active.jobs || []);
+            setMyCompletedJobs(completed.jobs || []);
+        } catch (err: any) {
+            console.error('Failed to load jobs:', err);
+            setError('Failed to load jobs. Please try again.');
+        } finally {
+            setLoading(false);
+        }
+    };
 
     const navItems = [
         { label: 'Dashboard', path: '/contractor/dashboard', icon: <LayoutDashboard className="w-5 h-5" /> },
@@ -91,18 +66,6 @@ export default function JobBoard() {
         { label: 'Wallet', path: '/contractor/wallet', icon: <WalletIcon className="w-5 h-5" /> },
     ];
 
-    const availableJobs = assignments.filter((j: any) => 
-        j.status === 'Open' || j.status === 'open' || j.status === 'available'
-    );
-
-    const myActiveJobs = activeJobs.filter((j: any) => 
-        j.status === 'InProgress' || j.status === 'in_progress' || j.status === 'active'
-    );
-
-    const myCompletedJobs = activeJobs.filter((j: any) => 
-        j.status === 'Complete' || j.status === 'completed' || j.status === 'Paid' || j.status === 'paid'
-    );
-
     const getFilteredJobs = () => {
         let filtered = filterStatus === 'available' ? availableJobs :
             filterStatus === 'inprogress' ? myActiveJobs :
@@ -110,61 +73,24 @@ export default function JobBoard() {
                     [...availableJobs, ...myActiveJobs, ...myCompletedJobs];
 
         if (filterCity !== 'all') {
-            filtered = filtered.filter((j: any) => (j.city || j.location) === filterCity);
+            filtered = filtered.filter(j => j.city === filterCity);
         }
 
         return filtered;
     };
 
-    const allJobs = [...assignments, ...activeJobs];
-    const cities = ['all', ...Array.from(new Set(allJobs.map((j: any) => j.city || j.location).filter(Boolean)))];
+    const cities = ['all', ...Array.from(new Set(jobs.map(j => j.city)))];
 
-    const handleAcceptJob = async (jobId: number) => {
-        if (user?.compliance_status === 'blocked') {
+    const handleAcceptJob = (jobId: number) => {
+        if (currentUser?.complianceStatus === 'blocked') {
             alert('You must fix compliance issues before accepting jobs. Please visit the Compliance Hub.');
             navigate('/contractor/compliance');
             return;
         }
 
-        try {
-            setProcessing(jobId);
-            await contractorApiService.acceptJob(jobId);
-            
-            // Refresh data
-            const [assignmentsData, activeJobsData] = await Promise.all([
-                contractorApiService.getAssignments(),
-                contractorApiService.getActiveJobs()
-            ]);
-            
-            setAssignments(assignmentsData.results || assignmentsData);
-            setActiveJobs(activeJobsData.results || activeJobsData);
-            
-            alert('Job accepted! You can now view it in "My Active Jobs".');
-            setFilterStatus('inprogress');
-        } catch (err) {
-            console.error('Failed to accept job:', err);
-            alert('Failed to accept job. Please try again.');
-        } finally {
-            setProcessing(null);
-        }
-    };
-
-    const handleRejectJob = async (jobId: number) => {
-        try {
-            setProcessing(jobId);
-            await contractorApiService.rejectJob(jobId);
-            
-            // Refresh assignments
-            const assignmentsData = await contractorApiService.getAssignments();
-            setAssignments(assignmentsData.results || assignmentsData);
-            
-            alert('Job rejected.');
-        } catch (err) {
-            console.error('Failed to reject job:', err);
-            alert('Failed to reject job. Please try again.');
-        } finally {
-            setProcessing(null);
-        }
+        assignContractorToJob(jobId, currentUser?.id || 0);
+        alert('Job accepted! You can now view it in "My Active Jobs".');
+        setFilterStatus('inprogress');
     };
 
     const filteredJobs = getFilteredJobs();
@@ -239,20 +165,20 @@ export default function JobBoard() {
 
                     {filteredJobs.length > 0 ? (
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                            {filteredJobs.map((job: any) => (
+                            {filteredJobs.map((job) => (
                                 <Card key={job.id} className="hover:scale-[1.02]">
                                     <div className="space-y-4">
                                         {/* Header */}
                                         <div className="flex items-start justify-between">
                                             <div>
-                                                <h3 className="font-semibold text-gray-900 dark:text-white text-lg">{job.property_address || job.propertyAddress}</h3>
-                                                <p className="text-sm text-gray-400">{job.customer_name || job.customerName}</p>
+                                                <h3 className="font-semibold text-gray-900 dark:text-white text-lg">{job.propertyAddress}</h3>
+                                                <p className="text-sm text-gray-400">{job.customerName}</p>
                                             </div>
                                             <div className="flex flex-col items-end gap-2">
                                                 <Badge variant={getStatusBadgeVariant(job.status)}>
                                                     {job.status}
                                                 </Badge>
-                                                {(job.is_project || job.isProject) && (
+                                                {job.isProject && (
                                                     <Badge variant="info">PROJECT</Badge>
                                                 )}
                                             </div>
@@ -262,57 +188,44 @@ export default function JobBoard() {
                                         <div className="grid grid-cols-2 gap-3 text-sm">
                                             <div className="flex items-center space-x-2 text-gray-300">
                                                 <MapPin className="w-4 h-4 text-blue-400" />
-                                                <span>{job.city || job.location}</span>
+                                                <span>{job.city}</span>
                                             </div>
                                             <div className="flex items-center space-x-2 text-gray-300">
                                                 <Clock className="w-4 h-4 text-purple-400" />
-                                                <span>{job.trade || job.category}</span>
+                                                <span>{job.trade}</span>
                                             </div>
                                             <div className="flex items-center space-x-2 text-gray-300">
                                                 <DollarSign className="w-4 h-4 text-green-400" />
-                                                <span className="font-semibold text-green-400">{formatCurrency(job.estimated_pay || job.total_amount || 420)}</span>
+                                                <span className="font-semibold text-green-400">{formatCurrency(420)}</span>
                                             </div>
                                             <div className="flex items-center space-x-2">
                                                 <Package className="w-4 h-4 text-cyan-400" />
-                                                <Badge variant={getStatusBadgeVariant(job.material_status || job.materialStatus || 'default')} className="text-xs">
-                                                    {job.material_status || job.materialStatus || 'Pending'}
+                                                <Badge variant={getStatusBadgeVariant(job.materialStatus || 'default')} className="text-xs">
+                                                    {job.materialStatus || 'Pending'}
                                                 </Badge>
                                             </div>
                                         </div>
 
                                         {/* Gate Code (if active) */}
-                                        {filterStatus === 'inprogress' && (job.gate_code || job.gateCode) && (
+                                        {job.assignedContractorId === currentUser?.id && job.gateCode && (
                                             <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3">
                                                 <p className="text-xs text-blue-300 mb-1">Gate Code:</p>
-                                                <p className="font-mono text-lg font-bold text-blue-200">{job.gate_code || job.gateCode}</p>
+                                                <p className="font-mono text-lg font-bold text-blue-200">{job.gateCode}</p>
                                             </div>
                                         )}
 
                                         {/* Actions */}
                                         <div className="flex gap-2">
                                             {filterStatus === 'available' && (
-                                                <>
-                                                    <Button
-                                                        variant="primary"
-                                                        size="sm"
-                                                        className="flex-1"
-                                                        onClick={() => handleAcceptJob(job.id)}
-                                                        disabled={processing === job.id || user?.compliance_status === 'blocked'}
-                                                    >
-                                                        {processing === job.id ? (
-                                                            <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                                                        ) : null}
-                                                        {user?.compliance_status === 'blocked' ? 'Fix Compliance' : 'Accept Job'}
-                                                    </Button>
-                                                    <Button
-                                                        variant="outline"
-                                                        size="sm"
-                                                        onClick={() => handleRejectJob(job.id)}
-                                                        disabled={processing === job.id}
-                                                    >
-                                                        Reject
-                                                    </Button>
-                                                </>
+                                                <Button
+                                                    variant="primary"
+                                                    size="sm"
+                                                    className="flex-1"
+                                                    onClick={() => handleAcceptJob(job.id)}
+                                                    disabled={currentUser?.complianceStatus === 'blocked'}
+                                                >
+                                                    {currentUser?.complianceStatus === 'blocked' ? 'Fix Compliance' : 'Accept Job'}
+                                                </Button>
                                             )}
                                             {filterStatus === 'inprogress' && (
                                                 <Button

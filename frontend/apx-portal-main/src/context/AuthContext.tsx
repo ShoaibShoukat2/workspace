@@ -1,135 +1,120 @@
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
+import { authApi } from '@/services/authApi';
 import type { User } from '@/types';
-import { apiService, type LoginRequest, type RegisterRequest } from '@/lib/api';
-import { AuthUtils } from '@/lib/auth';
 
 interface AuthContextType {
     currentUser: User | null;
-    login: (email: string) => Promise<void>;
-    loginWithAPI: (credentials: LoginRequest) => Promise<User>;
-    register: (userData: RegisterRequest) => Promise<void>;
-    logout: () => Promise<void>;
+    login: (email: string, password: string) => Promise<void>;
+    register: (userData: any) => Promise<void>;
+    logout: () => void;
     updateUser: (updates: Partial<User>) => void;
     isAuthenticated: boolean;
     loading: boolean;
-    error: string | null;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-    const [currentUser, setCurrentUser] = useState<User | null>(() => {
-        // Initialize from sessionStorage on mount - no useEffect needed
-        const storedUser = sessionStorage.getItem('currentUser');
-        return storedUser ? JSON.parse(storedUser) : null;
-    });
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState<string | null>(null);
+    const [currentUser, setCurrentUser] = useState<User | null>(null);
+    const [loading, setLoading] = useState(true);
 
-    const mapApiUserToUser = (apiUser: any): User => {
-        console.log('Mapping API user:', apiUser);
-        const userType = apiUser.user_type || apiUser.role || 'admin';
-        let role: User['role'] = 'admin';
-        
-        if (userType === 'contractor') role = 'contractor';
-        else if (userType === 'customer') role = 'customer';
-        else if (userType === 'fm') role = 'fm';
-        else if (userType === 'investor') role = 'investor';
-        else if (userType === 'admin') role = 'admin';
-        
-        const mappedUser = {
-            id: parseInt(apiUser.id.toString(), 10),
-            name: apiUser.first_name && apiUser.last_name 
-                ? `${apiUser.first_name} ${apiUser.last_name}`.trim()
-                : apiUser.username || apiUser.email,
-            email: apiUser.email,
-            role: role,
-            avatarUrl: '',
-        };
-        console.log('Mapped user:', mappedUser);
-        return mappedUser;
-    };
+    useEffect(() => {
+        // Check for existing token and validate
+        const token = localStorage.getItem('authToken');
+        if (token) {
+            validateToken();
+        } else {
+            setLoading(false);
+        }
+    }, []);
 
-    // Demo login (legacy - can be removed if not needed)
-    const login = async (email: string) => {
-        setLoading(true);
-        setError(null);
+    const validateToken = async () => {
         try {
-            // For demo purposes, create a basic user object
-            const demoUser: User = {
-                id: 1,
-                name: email.split('@')[0],
-                email: email,
-                role: 'admin',
-                avatarUrl: ''
+            const profile = await authApi.getProfile();
+            const user: User = {
+                id: profile.id,
+                name: profile.full_name || profile.email.split('@')[0],
+                email: profile.email,
+                role: profile.role.toLowerCase(),
+                profileID: profile.profile_id,
             };
-            setCurrentUser(demoUser);
-            sessionStorage.setItem('currentUser', JSON.stringify(demoUser));
+            setCurrentUser(user);
         } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : 'Login failed';
-            setError(errorMessage);
-            throw error;
+            console.error('Token validation failed:', error);
+            localStorage.removeItem('authToken');
         } finally {
             setLoading(false);
         }
     };
 
-    // API-based login
-    const loginWithAPI = async (credentials: LoginRequest) => {
-        setLoading(true);
-        setError(null);
+    const login = async (email: string, password: string) => {
         try {
-            const response = await apiService.login(credentials);
-            const user = mapApiUserToUser(response.user);
+            // Try new auth endpoint first
+            let response;
+            try {
+                response = await authApi.login(email, password);
+            } catch (error) {
+                // Fallback to legacy endpoint
+                console.log('Trying legacy login endpoint...');
+                response = await authApi.legacyLogin(email, password);
+            }
+            
+            // Store token
+            if (response.access_token) {
+                localStorage.setItem('authToken', response.access_token);
+            }
+            
+            // Set user from response
+            const user: User = {
+                id: response.user?.id || response.profile?.id || 1,
+                name: response.user?.full_name || response.profile?.email?.split('@')[0] || 'User',
+                email: response.user?.email || response.profile?.email || email,
+                role: (response.user?.role || response.profile?.user_role || 'customer').toLowerCase(),
+                profileID: response.profile?.profileID || response.profile?.profile_id,
+            };
             
             setCurrentUser(user);
-            sessionStorage.setItem('currentUser', JSON.stringify(user));
             
-            return user; // Return user for navigation
-        } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : 'Login failed';
-            setError(errorMessage);
-            throw error;
-        } finally {
-            setLoading(false);
+        } catch (error: any) {
+            console.error('Login failed:', error);
+            throw new Error(error.response?.data?.detail || error.message || 'Login failed');
         }
     };
 
-    // API-based registration
-    const register = async (userData: RegisterRequest) => {
-        setLoading(true);
-        setError(null);
+    const register = async (userData: any) => {
         try {
-            await apiService.register(userData);
-            // Note: User needs to verify email before they can login
-        } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : 'Registration failed';
-            setError(errorMessage);
-            throw error;
-        } finally {
-            setLoading(false);
+            let response;
+            try {
+                response = await authApi.register(userData);
+            } catch (error) {
+                // Fallback to legacy endpoint
+                response = await authApi.legacyRegister(userData);
+            }
+            
+            // Auto-login after registration if token provided
+            if (response.access_token) {
+                localStorage.setItem('authToken', response.access_token);
+                await validateToken();
+            }
+        } catch (error: any) {
+            throw new Error(error.response?.data?.detail || 'Registration failed');
         }
     };
 
-    const logout = async () => {
-        setLoading(true);
-        try {
-            await apiService.logout();
-        } catch (error) {
-            console.error('Logout error:', error);
-        } finally {
-            AuthUtils.clearTokens();
-            setCurrentUser(null);
-            sessionStorage.removeItem('currentUser');
-            setLoading(false);
-        }
+    const logout = () => {
+        localStorage.removeItem('authToken');
+        setCurrentUser(null);
+        
+        // Optional: Call logout API
+        authApi.logout().catch(() => {
+            // Ignore logout API errors
+        });
     };
 
     const updateUser = (updates: Partial<User>) => {
         if (currentUser) {
             const updatedUser = { ...currentUser, ...updates };
             setCurrentUser(updatedUser);
-            sessionStorage.setItem('currentUser', JSON.stringify(updatedUser));
         }
     };
 
@@ -138,13 +123,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             value={{
                 currentUser,
                 login,
-                loginWithAPI,
                 register,
                 logout,
                 updateUser,
                 isAuthenticated: !!currentUser,
                 loading,
-                error,
             }}
         >
             {children}
@@ -162,7 +145,6 @@ export function useAuth() {
 
 // Helper to get dashboard route by role
 export function getDashboardRoute(role: User['role']): string {
-    console.log('getDashboardRoute called with role:', role);
     switch (role) {
         case 'admin':
             return '/admin/dashboard';
@@ -173,10 +155,8 @@ export function getDashboardRoute(role: User['role']): string {
         case 'investor':
             return '/investor/dashboard';
         case 'customer':
-            console.log('Returning customer dashboard route');
             return '/customer/dashboard';
         default:
-            console.log('Unknown role, returning login');
             return '/login';
     }
 }

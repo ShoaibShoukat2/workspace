@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
+import { contractorApi } from '@/services/contractorApi';
 import PortalLayout from '@/components/PortalLayout';
 import Card from '@/components/ui/Card';
 import Badge, { getStatusBadgeVariant } from '@/components/ui/Badge';
@@ -14,42 +15,40 @@ import {
     Calendar,
     Package
 } from 'lucide-react';
-import { contractorApiService } from '@/lib/contractorApi';
 import { formatCurrency, formatDate } from '@/lib/utils';
-import Button from '@/components/ui/Button';
-import Button from '@/components/ui/Button';
 
 export default function Wallet() {
     const navigate = useNavigate();
     const { currentUser } = useAuth();
-
+    
     const [walletData, setWalletData] = useState<any>(null);
-    const [transactions, setTransactions] = useState<any[]>([]);
+    const [payouts, setPayouts] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
-        const fetchWalletData = async () => {
-            try {
-                setLoading(true);
-                setError(null);
-                
-                const [wallet, transactionData] = await Promise.all([
-                    contractorApiService.getWallet(),
-                    contractorApiService.getWalletTransactions(50)
-                ]);
-                
-                setWalletData(wallet);
-                setTransactions(transactionData);
-            } catch (err) {
-                setError(err instanceof Error ? err.message : 'Failed to load wallet data');
-            } finally {
-                setLoading(false);
-            }
-        };
-
-        fetchWalletData();
+        loadWalletData();
     }, []);
+
+    const loadWalletData = async () => {
+        try {
+            setLoading(true);
+            setError(null);
+            
+            const [wallet, payoutsData] = await Promise.all([
+                contractorApi.getWallet(),
+                contractorApi.getPayouts()
+            ]);
+            
+            setWalletData(wallet);
+            setPayouts(payoutsData.payouts || []);
+        } catch (err: any) {
+            console.error('Failed to load wallet data:', err);
+            setError('Failed to load wallet data. Please try again.');
+        } finally {
+            setLoading(false);
+        }
+    };
 
     const navItems = [
         { label: 'Dashboard', path: '/contractor/dashboard', icon: <LayoutDashboard className="w-5 h-5" /> },
@@ -58,16 +57,11 @@ export default function Wallet() {
         { label: 'Wallet', path: '/contractor/wallet', icon: <WalletIcon className="w-5 h-5" /> },
     ];
 
-    const myPayouts = transactions.filter((t: any) => t.type === 'payout');
-    const totalPaid = walletData?.total_earned || 0;
-    const pendingPayouts = walletData?.pending_payout || 0;
-
     if (loading) {
         return (
             <PortalLayout title="Wallet & Payouts" navItems={navItems}>
-                <div className="flex items-center justify-center py-12">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
-                    <span className="ml-3 text-gray-600 dark:text-gray-400">Loading wallet data...</span>
+                <div className="flex items-center justify-center h-64">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
                 </div>
             </PortalLayout>
         );
@@ -76,13 +70,21 @@ export default function Wallet() {
     if (error) {
         return (
             <PortalLayout title="Wallet & Payouts" navItems={navItems}>
-                <Card className="text-center py-12">
-                    <p className="text-red-600 dark:text-red-400 mb-4">{error}</p>
-                    <Button onClick={() => window.location.reload()}>Retry</Button>
-                </Card>
+                <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
+                    <p className="text-red-700 dark:text-red-400">{error}</p>
+                    <button 
+                        onClick={loadWalletData}
+                        className="mt-2 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
+                    >
+                        Retry
+                    </button>
+                </div>
             </PortalLayout>
         );
     }
+
+    const totalPaid = walletData?.total_paid || 0;
+    const pendingPayouts = walletData?.pending_amount || 0;
 
     return (
         <PortalLayout title="Wallet & Payouts" navItems={navItems}>
@@ -131,36 +133,47 @@ export default function Wallet() {
                                 <table className="w-full">
                                     <thead>
                                         <tr className="border-b border-white/10">
-                                            <th className="text-left py-3 px-4 text-sm font-semibold text-gray-400">Transaction ID</th>
-                                            <th className="text-left py-3 px-4 text-sm font-semibold text-gray-400">Type</th>
+                                            <th className="text-left py-3 px-4 text-sm font-semibold text-gray-400">Job ID</th>
+                                            <th className="text-left py-3 px-4 text-sm font-semibold text-gray-400">Job Type</th>
                                             <th className="text-left py-3 px-4 text-sm font-semibold text-gray-400">Amount</th>
+                                            <th className="text-left py-3 px-4 text-sm font-semibold text-gray-400">Material Reimbursed</th>
                                             <th className="text-left py-3 px-4 text-sm font-semibold text-gray-400">Status</th>
-                                            <th className="text-left py-3 px-4 text-sm font-semibold text-gray-400">Date</th>
+                                            <th className="text-left py-3 px-4 text-sm font-semibold text-gray-400">Payment Date</th>
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {myPayouts.map((transaction: any) => (
-                                            <tr key={transaction.id} className="border-b border-white/5 hover:bg-white/5 smooth-transition">
+                                        {myPayouts.map((payout) => (
+                                            <tr key={payout.id} className="border-b border-white/5 hover:bg-white/5 smooth-transition">
                                                 <td className="py-4 px-4">
-                                                    <span className="font-mono text-purple-400">#{transaction.id}</span>
+                                                    <span className="font-mono text-purple-400">#{payout.jobId}</span>
                                                 </td>
                                                 <td className="py-4 px-4">
-                                                    <Badge variant={transaction.job_type === 'investor' ? 'info' : 'default'}>
-                                                        {transaction.type || 'payout'}
+                                                    <Badge variant={payout.jobType === 'investor' ? 'info' : 'default'}>
+                                                        {payout.jobType}
                                                     </Badge>
                                                 </td>
                                                 <td className="py-4 px-4">
                                                     <span className="font-semibold text-green-400 text-lg">
-                                                        {formatCurrency(transaction.amount)}
+                                                        {formatCurrency(payout.amount)}
                                                     </span>
                                                 </td>
                                                 <td className="py-4 px-4">
-                                                    <Badge variant={getStatusBadgeVariant(transaction.status)}>
-                                                        {transaction.status}
+                                                    {payout.materialReimbursed > 0 ? (
+                                                        <div className="flex items-center space-x-2">
+                                                            <Package className="w-4 h-4 text-cyan-400" />
+                                                            <span className="text-cyan-300">{formatCurrency(payout.materialReimbursed)}</span>
+                                                        </div>
+                                                    ) : (
+                                                        <span className="text-gray-500">N/A</span>
+                                                    )}
+                                                </td>
+                                                <td className="py-4 px-4">
+                                                    <Badge variant={getStatusBadgeVariant(payout.status)}>
+                                                        {payout.status}
                                                     </Badge>
                                                 </td>
                                                 <td className="py-4 px-4 text-gray-300">
-                                                    {transaction.created_at ? formatDate(transaction.created_at) : '-'}
+                                                    {payout.paymentDate ? formatDate(payout.paymentDate) : '-'}
                                                 </td>
                                             </tr>
                                         ))}
@@ -172,8 +185,8 @@ export default function Wallet() {
                         <Card hover={false}>
                             <div className="text-center py-12">
                                 <WalletIcon className="w-16 h-16 text-gray-500 mx-auto mb-4" />
-                                <h3 className="text-xl font-semibold text-white mb-2">No Transactions Yet</h3>
-                                <p className="text-gray-400">Complete jobs to start earning. Transactions appear here once processed.</p>
+                                <h3 className="text-xl font-semibold text-white mb-2">No Payouts Yet</h3>
+                                <p className="text-gray-400">Complete jobs to start earning. Payouts appear here once approved by admin.</p>
                             </div>
                         </Card>
                     )}

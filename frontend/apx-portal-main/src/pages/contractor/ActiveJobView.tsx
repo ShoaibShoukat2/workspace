@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 
 import PortalLayout from '@/components/PortalLayout';
@@ -17,37 +17,17 @@ import {
     Flag,
     Package
 } from 'lucide-react';
-import { contractorApiService } from '@/lib/contractorApi';
+import { jobs, checklistItems, updateChecklistItem, updateJobField, createDispute } from '@/data/mockData';
 
 export default function ActiveJobView() {
     const { jobId } = useParams();
     const navigate = useNavigate();
 
-    const [job, setJob] = useState<any>(null);
-    const [jobChecklist, setJobChecklist] = useState<any[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
-    const [processing, setProcessing] = useState(false);
 
-    useEffect(() => {
-        const fetchJobDetails = async () => {
-            if (!jobId) return;
-            
-            try {
-                setLoading(true);
-                setError(null);
-                const jobData = await contractorApiService.getJobDetail(Number(jobId));
-                setJob(jobData);
-                setJobChecklist(jobData.checklist || []);
-            } catch (err) {
-                setError(err instanceof Error ? err.message : 'Failed to load job details');
-            } finally {
-                setLoading(false);
-            }
-        };
-
-        fetchJobDetails();
-    }, [jobId]);
+    const [job, setJob] = useState(jobs.find(j => j.id === Number(jobId)));
+    const [jobChecklist, setJobChecklist] = useState(
+        checklistItems.filter(i => i.jobId === Number(jobId))
+    );
 
     const navItems = [
         { label: 'Dashboard', path: '/contractor/dashboard', icon: <LayoutDashboard className="w-5 h-5" /> },
@@ -56,25 +36,14 @@ export default function ActiveJobView() {
         { label: 'Wallet', path: '/contractor/wallet', icon: <WalletIcon className="w-5 h-5" /> },
     ];
 
-    if (loading) {
-        return (
-            <PortalLayout title="Loading Job..." navItems={navItems}>
-                <div className="flex items-center justify-center py-12">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
-                    <span className="ml-3 text-gray-600 dark:text-gray-400">Loading job details...</span>
-                </div>
-            </PortalLayout>
-        );
-    }
-
-    if (error || !job) {
+    if (!job) {
         return (
             <PortalLayout title="Job Not Found" navItems={navItems}>
                 <Card>
                     <div className="text-center py-12">
                         <AlertCircle className="w-16 h-16 text-red-400 mx-auto mb-4" />
                         <h3 className="text-xl font-semibold text-white mb-2">Job Not Found</h3>
-                        <p className="text-gray-400 mb-4">{error || "The job you're looking for doesn't exist."}</p>
+                        <p className="text-gray-400 mb-4">The job you're looking for doesn't exist.</p>
                         <Button onClick={() => navigate('/contractor/jobs')}>
                             Back to Job Board
                         </Button>
@@ -84,130 +53,66 @@ export default function ActiveJobView() {
         );
     }
 
-    const handleChecklistToggle = async (itemId: string) => {
-        try {
-            const item = jobChecklist.find(i => i.id === itemId);
-            if (!item) return;
-
-            await contractorApiService.updateChecklist(job.id, item.id, { 
-                completed: !item.completed 
-            });
-            
-            // Refresh job data
-            const updatedJob = await contractorApiService.getJobDetail(Number(jobId));
-            setJob(updatedJob);
-            setJobChecklist(updatedJob.checklist || []);
-        } catch (err) {
-            alert('Failed to update checklist item');
-        }
+    const handleChecklistToggle = (itemId: string) => {
+        updateChecklistItem(itemId, !jobChecklist.find(i => i.id === itemId)?.done);
+        setJobChecklist(checklistItems.filter(i => i.jobId === Number(jobId)));
+        setJob(jobs.find(j => j.id === Number(jobId)));
     };
 
-    const handlePhotoUpload = async (type: 'before' | 'after') => {
-        try {
-            // Create a mock file input for demo
-            const input = document.createElement('input');
-            input.type = 'file';
-            input.accept = 'image/*';
-            input.multiple = true;
-            
-            input.onchange = async (e) => {
-                const files = (e.target as HTMLInputElement).files;
-                if (!files || files.length === 0) return;
-
-                const formData = new FormData();
-                Array.from(files).forEach((file, index) => {
-                    formData.append(`photo_${index}`, file);
-                });
-                formData.append('job_id', job.id.toString());
-                formData.append('photo_type', type);
-
-                try {
-                    setProcessing(true);
-                    // Note: This would use a specific photo upload endpoint
-                    // await contractorApiService.uploadStepMedia(stepId, formData);
-                    alert(`${type === 'before' ? 'Before' : 'After'} photos uploaded successfully!`);
-                    
-                    // Refresh job data
-                    const updatedJob = await contractorApiService.getJobDetail(Number(jobId));
-                    setJob(updatedJob);
-                } catch (err) {
-                    alert('Failed to upload photos');
-                } finally {
-                    setProcessing(false);
-                }
-            };
-            
-            input.click();
-        } catch (err) {
-            alert('Failed to upload photos');
-        }
+    const handlePhotoUpload = (type: 'before' | 'after') => {
+        const field = type === 'before' ? 'beforePhotos' : 'afterPhotos';
+        const currentCount = job[field] || 0;
+        updateJobField(job.id, field, currentCount + 1);
+        setJob(jobs.find(j => j.id === Number(jobId)));
+        alert(`${type === 'before' ? 'Before' : 'After'} photo uploaded (simulated)`);
     };
 
-    const handleFlagConcern = async () => {
+    const handleFlagConcern = () => {
         const description = prompt('Describe the concern:');
         if (description && description.trim()) {
-            try {
-                // Note: This would need a flag concern/create dispute API endpoint
-                alert('Concern flagged and sent to admin.');
-            } catch (err) {
-                alert('Failed to flag concern');
-            }
+            createDispute(job.id, 'contractor', 'Contractor flagged concern', description);
+            alert('Concern flagged and sent to admin.');
         }
     };
 
-    const handleMarkComplete = async () => {
-        try {
-            setProcessing(true);
-            await contractorApiService.submitJobCompletion(job.id, {
-                completion_notes: 'Job completed successfully',
-                checklist_completed: true,
-                photos_uploaded: true
-            });
-            
-            alert('Job marked as complete! Admin will review for payout approval.');
-            navigate('/contractor/jobs');
-        } catch (err) {
-            alert('Failed to mark job as complete');
-        } finally {
-            setProcessing(false);
-        }
+    const handleMarkComplete = () => {
+        updateJobField(job.id, 'status', 'Complete');
+        setJob(jobs.find(j => j.id === Number(jobId)));
+        alert('Job marked as complete! Admin will review for payout approval.');
+        navigate('/contractor/jobs');
     };
 
     const canComplete =
-        job.checklist_completed &&
-        (job.before_photos_count || 0) > 0 &&
-        (job.after_photos_count || 0) > 0 &&
-        (!job.materials || job.materials.every((m: any) => m.delivery_status === 'Delivered' || m.delivery_status === 'Correct'));
+        job.checklistCompleted &&
+        (job.beforePhotos || 0) > 0 &&
+        (job.afterPhotos || 0) > 0 &&
+        (!job.materials || job.materials.every(m => m.deliveryStatus === 'Delivered' || m.deliveryStatus === 'Correct'));
 
-    const hasMaterialIssues = job.materials?.some((m: any) =>
-        m.delivery_status === 'Missing Items' ||
-        m.delivery_status === 'Damaged' ||
-        m.delivery_status === 'Wrong Items'
+    const hasMaterialIssues = job.materials?.some(m =>
+        m.deliveryStatus === 'Missing Items' ||
+        m.deliveryStatus === 'Damaged' ||
+        m.deliveryStatus === 'Wrong Items'
     );
 
     return (
-        <PortalLayout title={`Job: ${job.address || job.location}`} navItems={navItems}>
+        <PortalLayout title={`Job: ${job.propertyAddress}`} navItems={navItems}>
             <div className="space-y-6 animate-fade-in">
                 {/* Job Header */}
                 <Card className="bg-gradient-to-r from-purple-500/20 to-pink-500/20 border-purple-500/30">
                     <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
                         <div>
-                            <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">{job.address || job.location}</h2>
+                            <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">{job.propertyAddress}</h2>
                             <div className="flex flex-wrap items-center gap-3 text-sm text-gray-300">
-                                <span>Customer: {job.customer_name}</span>
+                                <span>Customer: {job.customerName}</span>
                                 <span>•</span>
-                                <span>Title: {job.title}</span>
-                                {job.estimated_hours && (
-                                    <>
-                                        <span>•</span>
-                                        <span>Est. Hours: {job.estimated_hours}</span>
-                                    </>
-                                )}
+                                <span>City: {job.city}</span>
+                                <span>•</span>
+                                <span>Trade: {job.trade}</span>
                             </div>
-                            {job.gate_code && (
+                            {job.gateCode && (
                                 <div className="mt-3 inline-flex items-center space-x-2 bg-blue-500/20 border border-blue-500/30 rounded-lg px-4 py-2">
                                     <span className="text-sm text-blue-300">Gate Code:</span>
-                                    <span className="font-mono text-lg font-bold text-blue-200">{job.gate_code}</span>
+                                    <span className="font-mono text-lg font-bold text-blue-200">{job.gateCode}</span>
                                 </div>
                             )}
                         </div>
@@ -215,7 +120,7 @@ export default function ActiveJobView() {
                             <Badge variant={getStatusBadgeVariant(job.status)} className="text-base px-4 py-2">
                                 {job.status}
                             </Badge>
-                            {job.is_project && <Badge variant="info">PROJECT</Badge>}
+                            {job.isProject && <Badge variant="info">PROJECT</Badge>}
                         </div>
                     </div>
                 </Card>
@@ -239,7 +144,9 @@ export default function ActiveJobView() {
                     <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-3">Scope of Work</h3>
                     <Card hover={false}>
                         <p className="text-gray-300 leading-relaxed">
-                            {job.description || job.scope_of_work || 'Complete work as specified in the job requirements.'}
+                            {job.trade === 'painting' ? 'Paint designated areas with provided materials. Ensure proper surface preparation and application of primer and finish coats.' :
+                                job.trade === 'drywall' ? 'Patch and repair drywall as specified. Sand smooth and prepare for painting.' :
+                                    'Complete work as specified in the job scope.'}
                         </p>
                     </Card>
                 </div>
@@ -268,15 +175,15 @@ export default function ActiveJobView() {
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            {job.materials.map((material: any) => (
+                                            {job.materials.map((material) => (
                                                 <tr key={material.id} className="border-b border-gray-200 dark:border-white/5">
                                                     <td className="py-3 px-3 text-gray-900 dark:text-white">{material.name}</td>
                                                     <td className="py-3 px-3 text-gray-500 dark:text-gray-400 font-mono text-xs">{material.sku}</td>
                                                     <td className="py-3 px-3 text-gray-600 dark:text-gray-300">{material.quantity}</td>
                                                     <td className="py-3 px-3 text-gray-600 dark:text-gray-300">{material.supplier}</td>
                                                     <td className="py-3 px-3">
-                                                        <Badge variant={getStatusBadgeVariant(material.delivery_status || 'default')}>
-                                                            {material.delivery_status || 'N/A'}
+                                                        <Badge variant={getStatusBadgeVariant(material.deliveryStatus || 'default')}>
+                                                            {material.deliveryStatus || 'N/A'}
                                                         </Badge>
                                                     </td>
                                                 </tr>
@@ -307,22 +214,22 @@ export default function ActiveJobView() {
                     <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-3 flex items-center space-x-2">
                         <CheckSquare className="w-6 h-6 text-purple-400" />
                         <span>Checklist</span>
-                        <Badge variant={job.checklist_completed ? 'success' : 'warning'}>
-                            {jobChecklist.filter((i: any) => i.completed).length}/{jobChecklist.length} Complete
+                        <Badge variant={job.checklistCompleted ? 'success' : 'warning'}>
+                            {jobChecklist.filter(i => i.done).length}/{jobChecklist.length} Complete
                         </Badge>
                     </h3>
                     <div className="grid gap-3">
-                        {jobChecklist.map((item: any) => (
+                        {jobChecklist.map((item) => (
                             <Card key={item.id} hover={false} className="cursor-pointer" onClick={() => handleChecklistToggle(item.id)}>
                                 <div className="flex items-center space-x-3">
                                     <input
                                         type="checkbox"
-                                        checked={item.completed}
+                                        checked={item.done}
                                         onChange={() => handleChecklistToggle(item.id)}
                                         className="w-5 h-5 rounded border-white/20 bg-white/5 text-purple-500 focus:ring-purple-400"
                                     />
-                                    <span className={`text-gray-900 dark:text-white ${item.completed ? 'line-through text-gray-400' : ''}`}>
-                                        {item.description || item.label}
+                                    <span className={`text-gray-900 dark:text-white ${item.done ? 'line-through text-gray-400' : ''}`}>
+                                        {item.label}
                                     </span>
                                 </div>
                             </Card>
@@ -341,16 +248,10 @@ export default function ActiveJobView() {
                         <Card hover={false}>
                             <div className="text-center">
                                 <h4 className="font-semibold text-gray-900 dark:text-white mb-2">Before Photos</h4>
-                                <p className="text-3xl font-bold text-purple-400 mb-3">{job.before_photos_count || 0}</p>
-                                <Button 
-                                    variant={job.before_photos_count ? 'outline' : 'primary'} 
-                                    size="sm" 
-                                    onClick={() => handlePhotoUpload('before')} 
-                                    className="w-full"
-                                    disabled={processing}
-                                >
+                                <p className="text-3xl font-bold text-purple-400 mb-3">{job.beforePhotos || 0}</p>
+                                <Button variant={job.beforePhotos ? 'outline' : 'primary'} size="sm" onClick={() => handlePhotoUpload('before')} className="w-full">
                                     <Upload className="w-4 h-4 mr-2" />
-                                    {job.before_photos_count ? 'Add More' : 'Upload Before Photos'}
+                                    {job.beforePhotos ? 'Add More' : 'Upload Before Photos'}
                                 </Button>
                             </div>
                         </Card>
@@ -359,16 +260,10 @@ export default function ActiveJobView() {
                         <Card hover={false}>
                             <div className="text-center">
                                 <h4 className="font-semibold text-gray-900 dark:text-white mb-2">After Photos</h4>
-                                <p className="text-3xl font-bold text-green-400 mb-3">{job.after_photos_count || 0}</p>
-                                <Button 
-                                    variant={job.after_photos_count ? 'outline' : 'primary'} 
-                                    size="sm" 
-                                    onClick={() => handlePhotoUpload('after')} 
-                                    className="w-full"
-                                    disabled={processing}
-                                >
+                                <p className="text-3xl font-bold text-green-400 mb-3">{job.afterPhotos || 0}</p>
+                                <Button variant={job.afterPhotos ? 'outline' : 'primary'} size="sm" onClick={() => handlePhotoUpload('after')} className="w-full">
                                     <Upload className="w-4 h-4 mr-2" />
-                                    {job.after_photos_count ? 'Add More' : 'Upload After Photos'}
+                                    {job.afterPhotos ? 'Add More' : 'Upload After Photos'}
                                 </Button>
                             </div>
                         </Card>
@@ -388,12 +283,9 @@ export default function ActiveJobView() {
                     <Button
                         variant="primary"
                         onClick={handleMarkComplete}
-                        disabled={!canComplete || processing}
+                        disabled={!canComplete}
                         className="flex-1"
                     >
-                        {processing ? (
-                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                        ) : null}
                         {canComplete ? 'Mark Job Complete ✓' : 'Complete Requirements First'}
                     </Button>
                 </div>
@@ -403,14 +295,14 @@ export default function ActiveJobView() {
                     <Card className="bg-blue-500/10 border-blue-500/30">
                         <h4 className="font-semibold text-blue-300 mb-2">Requirements to Complete Job:</h4>
                         <ul className="space-y-2 text-sm">
-                            <li className={`flex items-center space-x-2 ${job.checklist_completed ? 'text-green-400' : 'text-gray-300'}`}>
-                                {job.checklist_completed ? '✓' : '○'} All checklist items completed
+                            <li className={`flex items-center space-x-2 ${job.checklistCompleted ? 'text-green-400' : 'text-gray-300'}`}>
+                                {job.checklistCompleted ? '✓' : '○'} All checklist items completed
                             </li>
-                            <li className={`flex items-center space-x-2 ${(job.before_photos_count || 0) > 0 ? 'text-green-400' : 'text-gray-300'}`}>
-                                {(job.before_photos_count || 0) > 0 ? '✓' : '○'} Before photos uploaded
+                            <li className={`flex items-center space-x-2 ${(job.beforePhotos || 0) > 0 ? 'text-green-400' : 'text-gray-300'}`}>
+                                {(job.beforePhotos || 0) > 0 ? '✓' : '○'} Before photos uploaded
                             </li>
-                            <li className={`flex items-center space-x-2 ${(job.after_photos_count || 0) > 0 ? 'text-green-400' : 'text-gray-300'}`}>
-                                {(job.after_photos_count || 0) > 0 ? '✓' : '○'} After photos uploaded
+                            <li className={`flex items-center space-x-2 ${(job.afterPhotos || 0) > 0 ? 'text-green-400' : 'text-gray-300'}`}>
+                                {(job.afterPhotos || 0) > 0 ? '✓' : '○'} After photos uploaded
                             </li>
                             {job.materials && job.materials.length > 0 && (
                                 <li className={`flex items-center space-x-2 ${!hasMaterialIssues ? 'text-green-400' : 'text-red-400'}`}>

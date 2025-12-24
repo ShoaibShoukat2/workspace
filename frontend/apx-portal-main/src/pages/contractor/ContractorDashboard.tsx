@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
+import { contractorApi } from '@/services/contractorApi';
 import PortalLayout from '@/components/PortalLayout';
 import Card from '@/components/ui/Card';
 import Badge, { getStatusBadgeVariant } from '@/components/ui/Badge';
@@ -18,75 +19,45 @@ import {
     AlertCircle,
     MapPin,
     Clock,
-    ArrowRight,
-    Loader2
+    ArrowRight
 } from 'lucide-react';
-import { contractorApiService } from '@/lib/contractorApi';
 import { formatCurrency } from '@/lib/utils';
 
 export default function ContractorDashboard() {
     const navigate = useNavigate();
-    const { user } = useAuth();
-
+    const { currentUser } = useAuth();
+    
+    const [dashboardData, setDashboardData] = useState<any>(null);
+    const [availableJobs, setAvailableJobs] = useState<any[]>([]);
+    const [myJobs, setMyJobs] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    const [dashboardData, setDashboardData] = useState<any>(null);
-    const [activeJobs, setActiveJobs] = useState<any[]>([]);
-    const [walletData, setWalletData] = useState<any>(null);
-    const [complianceData, setComplianceData] = useState<any>(null);
 
     useEffect(() => {
-        const fetchDashboardData = async () => {
-            try {
-                setLoading(true);
-                setError(null);
-
-                const [dashboard, jobs, wallet, compliance] = await Promise.all([
-                    contractorApiService.getDashboard(),
-                    contractorApiService.getActiveJobs(),
-                    contractorApiService.getWallet(),
-                    contractorApiService.getCompliance()
-                ]);
-
-                setDashboardData(dashboard);
-                setActiveJobs(jobs.results || jobs);
-                setWalletData(wallet);
-                setComplianceData(compliance);
-            } catch (err) {
-                console.error('Failed to fetch contractor dashboard data:', err);
-                setError(err instanceof Error ? err.message : 'Failed to load dashboard data');
-            } finally {
-                setLoading(false);
-            }
-        };
-
-        fetchDashboardData();
+        loadDashboardData();
     }, []);
 
-    if (loading) {
-        return (
-            <PortalLayout title="Contractor Dashboard" navItems={navItems}>
-                <div className="flex items-center justify-center h-64">
-                    <Loader2 className="w-8 h-8 animate-spin text-purple-600" />
-                    <span className="ml-2 text-gray-600">Loading dashboard...</span>
-                </div>
-            </PortalLayout>
-        );
-    }
-
-    if (error) {
-        return (
-            <PortalLayout title="Contractor Dashboard" navItems={navItems}>
-                <div className="flex items-center justify-center h-64">
-                    <div className="text-center">
-                        <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
-                        <p className="text-red-600 mb-4">{error}</p>
-                        <Button onClick={() => window.location.reload()}>Retry</Button>
-                    </div>
-                </div>
-            </PortalLayout>
-        );
-    }
+    const loadDashboardData = async () => {
+        try {
+            setLoading(true);
+            setError(null);
+            
+            const [dashboard, availableJobsData, myJobsData] = await Promise.all([
+                contractorApi.getDashboard(),
+                contractorApi.getAvailableJobs({ limit: 3 }),
+                contractorApi.getMyJobs({ status: 'active', limit: 5 })
+            ]);
+            
+            setDashboardData(dashboard);
+            setAvailableJobs(availableJobsData.jobs || []);
+            setMyJobs(myJobsData.jobs || []);
+        } catch (err: any) {
+            console.error('Failed to load dashboard data:', err);
+            setError('Failed to load dashboard data. Please try again.');
+        } finally {
+            setLoading(false);
+        }
+    };
 
     const navItems = [
         { label: 'Dashboard', path: '/contractor/dashboard', icon: <LayoutDashboard className="w-5 h-5" /> },
@@ -95,13 +66,36 @@ export default function ContractorDashboard() {
         { label: 'Wallet', path: '/contractor/wallet', icon: <WalletIcon className="w-5 h-5" /> },
     ];
 
-    const complianceStatus = complianceData?.overall_status || user?.compliance_status || 'active';
-    const stats = {
-        completedJobsCount: dashboardData?.completed_jobs_count || 0,
-        pendingPayoutTotal: walletData?.pending_balance || 0,
-        totalEarnings: walletData?.total_earnings || 0,
-        activeJobsCount: dashboardData?.active_jobs_count || activeJobs.length
-    };
+    if (loading) {
+        return (
+            <PortalLayout title="Contractor Dashboard" navItems={navItems}>
+                <div className="flex items-center justify-center h-64">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                </div>
+            </PortalLayout>
+        );
+    }
+
+    if (error) {
+        return (
+            <PortalLayout title="Contractor Dashboard" navItems={navItems}>
+                <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
+                    <p className="text-red-700 dark:text-red-400">{error}</p>
+                    <button 
+                        onClick={loadDashboardData}
+                        className="mt-2 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
+                    >
+                        Retry
+                    </button>
+                </div>
+            </PortalLayout>
+        );
+    }
+
+    // Extract data from API response with fallbacks
+    const stats = dashboardData?.stats || {};
+    const activeJobs = myJobs.filter((job: any) => !['Complete', 'Paid'].includes(job.status));
+    const complianceStatus = dashboardData?.compliance_status || currentUser?.complianceStatus || 'active';
 
     return (
         <PortalLayout title="Contractor Dashboard" navItems={navItems}>
@@ -149,7 +143,7 @@ export default function ContractorDashboard() {
                         <div className="flex items-center justify-between">
                             <div>
                                 <p className="text-sm text-gray-600 dark:text-gray-400">Completed Jobs</p>
-                                <p className="text-3xl font-bold text-gray-900 dark:text-white mt-2">{stats.completedJobsCount}</p>
+                                <p className="text-3xl font-bold text-gray-900 dark:text-white mt-2">{stats?.completedJobsCount || 0}</p>
                                 <div className="flex items-center space-x-2 mt-2">
                                     <TrendingUp className="w-4 h-4 text-green-400" />
                                     <span className="text-sm text-green-400">+12% this month</span>
@@ -166,7 +160,7 @@ export default function ContractorDashboard() {
                             <div>
                                 <p className="text-sm text-gray-600 dark:text-gray-400">Pending Payouts</p>
                                 <p className="text-3xl font-bold text-gray-900 dark:text-white mt-2">
-                                    {formatCurrency(stats.pendingPayoutTotal)}
+                                    {formatCurrency(stats?.pendingPayoutTotal || 0)}
                                 </p>
                                 <Button
                                     variant="ghost"
@@ -189,7 +183,7 @@ export default function ContractorDashboard() {
                     <div className="flex items-center justify-between mb-6">
                         <div>
                             <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-                                Hello, {user?.first_name || user?.name?.split(' ')[0] || 'Contractor'}
+                                Hello, {currentUser?.name.split(' ')[0]}
                             </h1>
                             <p className="text-gray-600 dark:text-gray-600 dark:text-gray-400 mt-1">
                                 Use provided materials only. Do not purchase your own.
@@ -230,15 +224,15 @@ export default function ContractorDashboard() {
                                                 </div>
                                                 <div>
                                                     <div className="flex items-center space-x-2">
-                                                        <h3 className="font-semibold text-gray-900 dark:text-white">{job.property_address || job.address}</h3>
-                                                        {job.is_project && (
+                                                        <h3 className="font-semibold text-gray-900 dark:text-white">{job.propertyAddress}</h3>
+                                                        {job.isProject && (
                                                             <Badge variant="info">Project</Badge>
                                                         )}
                                                     </div>
-                                                    <p className="text-sm text-gray-600 dark:text-gray-400">{job.customer_name || job.customer?.name}</p>
+                                                    <p className="text-sm text-gray-600 dark:text-gray-400">{job.customerName}</p>
                                                 </div>
                                             </div>
-                                            <Badge variant={job.status === 'in_progress' || job.status === 'InProgress' ? 'warning' : 'success'}>
+                                            <Badge variant={job.status === 'InProgress' ? 'warning' : 'success'}>
                                                 {job.status}
                                             </Badge>
                                         </div>
@@ -246,11 +240,11 @@ export default function ContractorDashboard() {
                                         <div className="space-y-3 mb-4">
                                             <div className="flex items-center text-sm text-gray-600 dark:text-gray-400">
                                                 <Clock className="w-4 h-4 mr-2 opacity-70" />
-                                                Scheduled: {job.scheduled_time || job.scheduledTime ? new Date(job.scheduled_time || job.scheduledTime).toLocaleDateString() : 'TBD'}
+                                                Scheduled: {job.scheduledTime ? new Date(job.scheduledTime).toLocaleDateString() : 'TBD'}
                                             </div>
                                             <div className="flex items-center justify-between text-sm">
                                                 <span className="text-gray-600 dark:text-gray-400">Estimated Pay:</span>
-                                                <span className="font-semibold text-green-600 dark:text-green-400">{formatCurrency(job.estimated_pay || job.total_amount || 280)}</span>
+                                                <span className="font-semibold text-green-600 dark:text-green-400">{formatCurrency(280)}</span>
                                             </div>
                                         </div>
 
@@ -291,34 +285,35 @@ export default function ContractorDashboard() {
                     <div className="mt-8">
                         <div className="flex items-center justify-between mb-4">
                             <h2 className="text-xl font-bold text-gray-900 dark:text-white">New Opportunities</h2>
-                            <Button variant="ghost" className="text-purple-500 hover:text-purple-600" onClick={() => navigate('/contractor/jobs')}>
+                            <Button variant="ghost" className="text-purple-500 hover:text-purple-600">
                                 View All
                                 <ArrowRight className="w-4 h-4 ml-1" />
                             </Button>
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                            {dashboardData?.available_jobs?.slice(0, 3).map((job: any) => (
+                            {availableJobs.slice(0, 3).map((job) => (
                                 <Card key={job.id} className="opacity-75 hover:opacity-100 transition-opacity">
                                     <div className="flex items-start justify-between">
                                         <div>
-                                            <h3 className="font-semibold text-gray-900 dark:text-white">{job.property_address || job.address}</h3>
-                                            <p className="text-sm text-gray-600 dark:text-gray-400">{job.customer_name || job.customer?.name}</p>
+                                            <h3 className="font-semibold text-gray-900 dark:text-white">{job.propertyAddress}</h3>
+                                            <p className="text-sm text-gray-600 dark:text-gray-400">{job.customerName}</p>
                                         </div>
-                                        {job.is_project && (
+                                        {job.isProject && (
                                             <Badge variant="info">Project</Badge>
                                         )}
                                     </div>
 
                                     <div className="flex items-center justify-between text-sm mt-4">
                                         <span className="text-gray-600 dark:text-gray-400">Estimated Pay:</span>
-                                        <span className="font-semibold text-green-400">{formatCurrency(job.estimated_pay || job.total_amount || 280)}</span>
+                                        <span className="font-semibold text-green-400">{formatCurrency(280)}</span>
                                     </div>
 
-                                    <Button className="w-full mt-4" size="sm" variant="outline" onClick={() => navigate('/contractor/jobs')}>
+                                    <Button className="w-full mt-4" size="sm" variant="outline">
                                         View Details
                                     </Button>
                                 </Card>
-                            )) || (
+                            ))}
+                            {availableJobs.length === 0 && (
                                 <div className="col-span-3">
                                     <Card hover={false}>
                                         <div className="text-center py-8">

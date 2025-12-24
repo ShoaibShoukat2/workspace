@@ -40,15 +40,22 @@
 
 @layer components {
   .glass-card {
-    @apply bg-white dark:bg-gray-800 backdrop-blur-md border border-gray-200 dark:border-gray-700 rounded-2xl shadow-glass dark:shadow-glass-dark smooth-transition;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.03) 0%, rgba(255, 255, 255, 0.01) 100%);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border-radius: 1rem;
+    transition: all 0.3s ease;
   }
 
   .glass-card:hover {
-    @apply shadow-glass-hover dark:shadow-glass-hover-dark border-purple-300 dark:border-purple-600/60 transform translate-y-[-2px];
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0.02) 100%);
+    border-color: rgba(255, 255, 255, 0.1);
+    transform: translateY(-2px);
   }
 
   .gradient-text {
-    @apply bg-gradient-to-r from-purple-600 to-pink-600 dark:from-purple-400 dark:to-pink-400 bg-clip-text text-transparent;
+    @apply bg-gradient-to-r from-emerald-400 to-teal-300 dark:from-emerald-400 dark:to-teal-300 bg-clip-text text-transparent;
   }
 
   .smooth-transition {
@@ -68,10 +75,21 @@
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(168, 85, 247, 0.5);
+  background: rgba(16, 185, 129, 0.5);
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(168, 85, 247, 0.7);
+  background: rgba(16, 185, 129, 0.7);
+}
+
+/* Auth-specific utilities */
+.glass-input {
+  background: rgba(15, 23, 42, 0.8);
+  border: 1px solid rgba(148, 163, 184, 0.35);
+}
+
+.glass-input:focus {
+  border-color: rgba(16, 185, 129, 0.7);
+  box-shadow: 0 0 0 1px rgba(16, 185, 129, 0.35);
 }

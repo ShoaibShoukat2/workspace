@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { X, User, Home, Phone, Mail, FileText } from 'lucide-react';
 import Button from '@/components/ui/Button';
+import { addLead } from '@/data/mockData';
 
 interface AddLeadModalProps {
     isOpen: boolean;
@@ -19,39 +20,23 @@ export default function AddLeadModal({ isOpen, onClose, onSuccess }: AddLeadModa
 
     if (!isOpen) return null;
 
-    const handleSubmit = async (e: React.FormEvent) => {
+    const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
 
-        try {
-            // Create lead via API
-            const response = await fetch('/api/leads/', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${localStorage.getItem('token')}`
-                },
-                body: JSON.stringify({
-                    name: formData.name,
-                    property_address: formData.property,
-                    phone: formData.phone,
-                    email: formData.email,
-                    notes: formData.notes,
-                    source: 'Manual',
-                    stage: 'New'
-                })
-            });
+        // Add to mock DB
+        addLead({
+            name: formData.name,
+            property: formData.property,
+            stage: 'New',
+            phone: formData.phone,
+            email: formData.email,
+            source: 'Manual'
+        });
 
-            if (response.ok) {
-                // Reset and close
-                setFormData({ name: '', property: '', phone: '', email: '', notes: '' });
-                onSuccess();
-                onClose();
-            } else {
-                console.error('Failed to create lead');
-            }
-        } catch (error) {
-            console.error('Error creating lead:', error);
-        }
+        // Reset and close
+        setFormData({ name: '', property: '', phone: '', email: '', notes: '' });
+        onSuccess();
+        onClose();
     };
 
     return (

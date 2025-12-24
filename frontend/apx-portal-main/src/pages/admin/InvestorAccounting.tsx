@@ -1,4 +1,3 @@
-import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import PortalLayout from '@/components/PortalLayout';
@@ -14,43 +13,12 @@ import {
     Users,
     TrendingUp
 } from 'lucide-react';
+import { jobs, contractorPayouts, materialOrders } from '@/data/mockData';
 import { formatCurrency } from '@/lib/utils';
 
 export default function InvestorAccounting() {
-    const navigate = useNavigate();
-    const { currentUser } = useAuth();
-    const [investorJobs, setInvestorJobs] = useState([]);
-    const [contractorPayouts, setContractorPayouts] = useState([]);
-    const [materialOrders, setMaterialOrders] = useState([]);
-    const [loading, setLoading] = useState(true);
-
-    useEffect(() => {
-        fetchAccountingData();
-    }, []);
-
-    const fetchAccountingData = async () => {
-        try {
-            const [jobsRes, payoutsRes, materialsRes] = await Promise.all([
-                fetch('/api/jobs/?is_project=true', {
-                    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-                }),
-                fetch('/api/contractor-payouts/', {
-                    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-                }),
-                fetch('/api/material-orders/', {
-                    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-                })
-            ]);
-
-            if (jobsRes.ok) setInvestorJobs(await jobsRes.json());
-            if (payoutsRes.ok) setContractorPayouts(await payoutsRes.json());
-            if (materialsRes.ok) setMaterialOrders(await materialsRes.json());
-        } catch (error) {
-            console.error('Error fetching accounting data:', error);
-        } finally {
-            setLoading(false);
-        }
-    };
+    useNavigate();
+    useAuth();
 
     const navItems = [
         { label: 'Dashboard', path: '/admin/dashboard', icon: <LayoutDashboard className="w-5 h-5" /> },
@@ -63,19 +31,12 @@ export default function InvestorAccounting() {
         { label: 'Leads', path: '/admin/leads', icon: <Users className="w-5 h-5" /> },
     ];
 
+    const investorJobs = jobs.filter(j => j.isProject);
     const totalRevenue = investorJobs.length * 5000; // Simulated revenue
-    const totalCosts = contractorPayouts.filter((p: any) => p.job_type === 'investor').reduce((sum: number, p: any) => sum + p.amount, 0) +
-        materialOrders.filter((m: any) => investorJobs.some((j: any) => j.id === m.job_id)).reduce((sum: number, m: any) => sum + m.total_cost, 0);
+    const totalCosts = contractorPayouts.filter(p => p.jobType === 'investor').reduce((sum, p) => sum + p.amount, 0) +
+        materialOrders.filter(m => investorJobs.some(j => j.id === m.jobId)).reduce((sum, m) => sum + m.totalCost, 0);
     const netProfit = totalRevenue - totalCosts;
     const profitMargin = totalRevenue > 0 ? ((netProfit / totalRevenue) * 100).toFixed(1) : 0;
-
-    if (loading) {
-        return (
-            <PortalLayout title="Investor Accounting" navItems={navItems}>
-                <div className="text-center py-8">Loading accounting data...</div>
-            </PortalLayout>
-        );
-    }
 
     return (
         <PortalLayout title="Investor Accounting" navItems={navItems}>
@@ -140,11 +101,11 @@ export default function InvestorAccounting() {
                             <div>
                                 <p className="font-semibold text-gray-900 dark:text-white">Contractor Payouts</p>
                                 <p className="text-sm text-gray-600 dark:text-gray-400">
-                                    {contractorPayouts.filter((p: any) => p.job_type === 'investor').length} payouts
+                                    {contractorPayouts.filter(p => p.jobType === 'investor').length} payouts
                                 </p>
                             </div>
                             <p className="text-2xl font-bold text-red-600 dark:text-red-400">
-                                -{formatCurrency(contractorPayouts.filter((p: any) => p.job_type === 'investor').reduce((s: number, p: any) => s + p.amount, 0))}
+                                -{formatCurrency(contractorPayouts.filter(p => p.jobType === 'investor').reduce((s, p) => s + p.amount, 0))}
                             </p>
                         </div>
 
@@ -152,11 +113,11 @@ export default function InvestorAccounting() {
                             <div>
                                 <p className="font-semibold text-gray-900 dark:text-white">Material Costs</p>
                                 <p className="text-sm text-gray-600 dark:text-gray-400">
-                                    {materialOrders.filter((m: any) => investorJobs.some((j: any) => j.id === m.job_id)).length} orders
+                                    {materialOrders.filter(m => investorJobs.some(j => j.id === m.jobId)).length} orders
                                 </p>
                             </div>
                             <p className="text-2xl font-bold text-orange-600 dark:text-orange-400">
-                                -{formatCurrency(materialOrders.filter((m: any) => investorJobs.some((j: any) => j.id === m.job_id)).reduce((s: number, m: any) => s + m.total_cost, 0))}
+                                -{formatCurrency(materialOrders.filter(m => investorJobs.some(j => j.id === m.jobId)).reduce((s, m) => s + m.totalCost, 0))}
                             </p>
                         </div>
 
@@ -186,10 +147,10 @@ export default function InvestorAccounting() {
                                 </tr>
                             </thead>
                             <tbody>
-                                {investorJobs.map((job: any) => (
+                                {investorJobs.map((job) => (
                                     <tr key={job.id} className="border-b border-gray-100 dark:border-gray-800">
                                         <td className="py-3 px-4 font-mono text-purple-600 dark:text-purple-400">#{job.id}</td>
-                                        <td className="py-3 px-4 text-gray-900 dark:text-white">{job.property_address}</td>
+                                        <td className="py-3 px-4 text-gray-900 dark:text-white">{job.propertyAddress}</td>
                                         <td className="py-3 px-4 text-gray-700 dark:text-gray-300">{job.status}</td>
                                         <td className="py-3 px-4 text-right font-semibold text-green-600 dark:text-green-400">
                                             {formatCurrency(5000)}

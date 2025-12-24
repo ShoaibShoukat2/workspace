@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 
 import PortalLayout from '@/components/PortalLayout';
@@ -17,36 +17,15 @@ import {
     CheckCircle,
     Package
 } from 'lucide-react';
-import { adminApiService } from '@/lib/adminApi';
+import { disputes, resolveDispute, jobs, materialDeliveries } from '@/data/mockData';
 import { formatDate } from '@/lib/utils';
 
 export default function DisputeDetail() {
     const { disputeId } = useParams();
     const navigate = useNavigate();
     const [resolution, setResolution] = useState('');
-    const [dispute, setDispute] = useState<any>(null);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
-    const [resolving, setResolving] = useState(false);
 
-    useEffect(() => {
-        const fetchDispute = async () => {
-            if (!disputeId) return;
-            
-            try {
-                setLoading(true);
-                setError(null);
-                const disputeData = await adminApiService.getDisputeDetail(Number(disputeId));
-                setDispute(disputeData);
-            } catch (err) {
-                setError(err instanceof Error ? err.message : 'Failed to load dispute');
-            } finally {
-                setLoading(false);
-            }
-        };
-
-        fetchDispute();
-    }, [disputeId]);
+    const dispute = disputes.find(d => d.id === Number(disputeId));
 
     const navItems = [
         { label: 'Dashboard', path: '/admin/dashboard', icon: <LayoutDashboard className="w-5 h-5" /> },
@@ -59,22 +38,11 @@ export default function DisputeDetail() {
         { label: 'Leads', path: '/admin/leads', icon: <Users className="w-5 h-5" /> },
     ];
 
-    if (loading) {
-        return (
-            <PortalLayout title="Loading Dispute..." navItems={navItems}>
-                <div className="flex items-center justify-center py-12">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
-                    <span className="ml-3 text-gray-600 dark:text-gray-400">Loading dispute details...</span>
-                </div>
-            </PortalLayout>
-        );
-    }
-
-    if (error || !dispute) {
+    if (!dispute) {
         return (
             <PortalLayout title="Dispute Not Found" navItems={navItems}>
                 <Card className="text-center py-12">
-                    <p className="text-red-600 dark:text-red-400 mb-4">{error || 'Dispute not found.'}</p>
+                    <p className="text-gray-600 dark:text-gray-400">Dispute not found.</p>
                     <Button onClick={() => navigate('/admin/disputes')} className="mt-4">
                         Back to Disputes
                     </Button>
@@ -83,23 +51,14 @@ export default function DisputeDetail() {
         );
     }
 
-    const handleResolve = async () => {
+    const handleResolve = () => {
         if (!resolution.trim()) {
             alert('Please enter a resolution before marking as resolved.');
             return;
         }
-        
-        try {
-            setResolving(true);
-            // Note: This would need a resolve dispute API endpoint
-            // For now, we'll just show success and navigate back
-            alert('Dispute marked as resolved!');
-            navigate('/admin/disputes');
-        } catch (err) {
-            alert('Failed to resolve dispute. Please try again.');
-        } finally {
-            setResolving(false);
-        }
+        resolveDispute(dispute.id, resolution);
+        alert('Dispute marked as resolved!');
+        navigate('/admin/disputes');
     };
 
     return (

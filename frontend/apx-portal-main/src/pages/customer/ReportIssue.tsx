@@ -3,8 +3,8 @@ import { useParams } from 'react-router-dom';
 import Card from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
-import { AlertCircle, Home, Send, Bot, User as UserIcon, Loader2 } from 'lucide-react';
-import { customerApiService } from '@/lib/customerApi';
+import { AlertCircle, Home, Send, Bot, User as UserIcon } from 'lucide-react';
+import { getJobByToken, createDispute } from '@/data/mockData';
 
 type Message = {
     id: string;
@@ -15,57 +15,22 @@ type Message = {
 
 export default function ReportIssue() {
     const { token } = useParams();
-    
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
-    const [jobData, setJobData] = useState<any>(null);
+    const job = getJobByToken(token || 'mock-token-123') || getJobByToken('mock-token-123');
+
     const [messages, setMessages] = useState<Message[]>([]);
     const [inputText, setInputText] = useState('');
     const [isTyping, setIsTyping] = useState(false);
     const [reportStage, setReportStage] = useState<'initial' | 'details' | 'category' | 'submitted'>('initial');
     const [issueData, setIssueData] = useState({ description: '', category: 'other' });
-    const [submitting, setSubmitting] = useState(false);
 
     const messagesEndRef = useRef<HTMLDivElement>(null);
 
-    useEffect(() => {
-        const fetchJobData = async () => {
-            if (!token) {
-                setError('No issue token provided');
-                setLoading(false);
-                return;
-            }
-
-            try {
-                setLoading(true);
-                setError(null);
-                // For now, we'll use a mock response since this endpoint might not be implemented yet
-                // const data = await customerApiService.getJobByToken(token);
-                const data = {
-                    id: 101,
-                    property_address: '123 Main St, Detroit, MI',
-                    customer_name: 'John Doe',
-                    status: 'in_progress',
-                    contractor_name: 'Mike Smith'
-                };
-                setJobData(data);
-            } catch (err) {
-                console.error('Failed to fetch job data:', err);
-                setError(err instanceof Error ? err.message : 'Failed to load job details');
-            } finally {
-                setLoading(false);
-            }
-        };
-
-        fetchJobData();
-    }, [token]);
-
     // Initial Greeting
     useEffect(() => {
-        if (jobData && messages.length === 0) {
-            simulateAiResponse(`Hi, I'm your Apex Support Assistant. I see you have an active job at ${jobData.property_address}. How can I help you today?`);
+        if (job && messages.length === 0) {
+            simulateAiResponse(`Hi, I'm your Apex Support Assistant. I see you have an active job at ${job.propertyAddress}. How can I help you today?`);
         }
-    }, [jobData]);
+    }, [job]);
 
     // Auto-scroll to bottom
     useEffect(() => {
@@ -119,54 +84,25 @@ export default function ReportIssue() {
             // Finalize and Submit
             simulateAiResponse("Thank you. I am generating a formal report now...");
 
-            try {
-                setSubmitting(true);
-                await customerApiService.reportIssue(jobData.id, {
-                    category: issueData.category,
-                    description: issueData.description,
-                    details: inputText,
-                    priority: 'medium',
-                    reported_via: 'ai_chat'
-                });
-
-                setTimeout(() => {
-                    setReportStage('submitted');
-                    simulateAiResponse(`Update: Ticket #${Math.floor(Math.random() * 1000) + 500} created successfully. A manager will review this within 24 hours.`);
-                    setSubmitting(false);
-                }, 2000);
-            } catch (err) {
-                console.error('Failed to submit issue:', err);
-                simulateAiResponse("I'm sorry, there was an error submitting your report. Please try again or contact support directly.");
-                setSubmitting(false);
+            if (job) {
+                createDispute(job.id, 'customer', `${issueData.category}: AI Reported`, `${issueData.description} \n\nDetails: ${inputText}`);
             }
+
+            setTimeout(() => {
+                setReportStage('submitted');
+                simulateAiResponse(`Update: Ticket #${Math.floor(Math.random() * 1000) + 500} created successfully. A manager will review this within 24 hours.`);
+            }, 2000);
         } else {
             simulateAiResponse("Your issue has already been logged. Is there anything else?");
         }
     };
 
-    if (loading) {
+    if (!job) {
         return (
             <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center p-4">
-                <div className="text-center">
-                    <Loader2 className="w-8 h-8 animate-spin text-purple-600 mx-auto mb-4" />
-                    <p className="text-gray-600">Loading job details...</p>
-                </div>
-            </div>
-        );
-    }
-
-    if (error || !jobData) {
-        return (
-            <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center p-4">
-                <Card className="max-w-md w-full text-center p-8">
+                <Card className="max-w-md w-full text-center">
                     <AlertCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />
-                    <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-2">Invalid Link</h2>
-                    <p className="text-gray-600 dark:text-gray-400 mb-4">
-                        {error || 'The issue report link is invalid or has expired.'}
-                    </p>
-                    <Button onClick={() => window.location.reload()}>
-                        Retry
-                    </Button>
+                    <h2 className="text-xl font-bold text-gray-900 dark:text-white">Invalid Link</h2>
                 </Card>
             </div>
         );
@@ -188,10 +124,10 @@ export default function ReportIssue() {
                     <h3 className="font-semibold text-gray-900 dark:text-white mb-2">Job Details</h3>
                     <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">
                         <Home className="w-4 h-4 inline mr-2" />
-                        {jobData.property_address}
+                        {job.propertyAddress}
                     </p>
                     <p className="text-sm text-gray-600 dark:text-gray-400">
-                        Job ID: #{jobData.id}
+                        Job ID: #{job.id}
                     </p>
                 </Card>
             </div>
@@ -257,14 +193,10 @@ export default function ReportIssue() {
                         />
                         <Button
                             type="submit"
-                            disabled={!inputText.trim() || reportStage === 'submitted' || submitting}
+                            disabled={!inputText.trim() || reportStage === 'submitted'}
                             className="absolute right-1 top-1 bottom-1 rounded-full w-10 h-10 p-0 flex items-center justify-center bg-purple-600 hover:bg-purple-700 text-white shadow-md"
                         >
-                            {submitting ? (
-                                <Loader2 className="w-4 h-4 animate-spin" />
-                            ) : (
-                                <Send className="w-4 h-4 ml-0.5" />
-                            )}
+                            <Send className="w-4 h-4 ml-0.5" />
                         </Button>
                     </form>
                     <p className="text-center text-xs text-gray-400 mt-2">

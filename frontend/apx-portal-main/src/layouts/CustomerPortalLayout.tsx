@@ -1,6 +1,6 @@
 import { Outlet, useParams } from 'react-router-dom';
 import PortalLayout from '@/components/PortalLayout';
-import { MapPin, Package, AlertTriangle, FileText, CheckCircle, Layers } from 'lucide-react';
+import { MapPin, Package, AlertTriangle, FileText, CheckCircle, Layers, Briefcase } from 'lucide-react';
 
 export default function CustomerPortalLayout() {
     // In a real app, this would come from the active job context or auth
@@ -10,6 +10,7 @@ export default function CustomerPortalLayout() {
 
     const navItems = [
         { label: 'Dashboard', path: '/customer/dashboard', icon: <MapPin className="w-5 h-5" /> },
+        { label: 'Job Management', path: '/customer/job-management', icon: <Briefcase className="w-5 h-5" /> },
         { label: 'Materials', path: `/materials/${magicToken}`, icon: <Layers className="w-5 h-5" /> },
         { label: 'Delivery', path: `/materials/${magicToken}/delivery`, icon: <CheckCircle className="w-5 h-5" /> },
         { label: 'Support', path: `/issue/${magicToken}`, icon: <AlertTriangle className="w-5 h-5" /> },

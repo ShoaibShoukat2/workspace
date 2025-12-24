@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { investorApi } from '@/services/investorApi';
 import PortalLayout from '@/components/PortalLayout';
 import Card from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
@@ -16,9 +17,7 @@ import {
     Users,
     Plus,
     UserPlus,
-    Download,
-    Loader2,
-    AlertCircle
+    Download
 } from 'lucide-react';
 import {
     LineChart,
@@ -32,9 +31,9 @@ import {
     Pie,
     Cell
 } from 'recharts';
-import { investorApiService } from '@/lib/investorApi';
 import { Job, JobStatus } from '@/types';
 import AddLeadModal from '@/components/leads/AddLeadModal';
+import { investorJobBreakdown } from '@/data/mockData';
 
 // Helper to format currency
 const formatCurrency = (amount: number) => {
@@ -55,89 +54,83 @@ export default function InvestorDashboard() {
     const navigate = useNavigate();
     const location = useLocation();
     
+    const [dashboardData, setDashboardData] = useState<any>(null);
+    const [jobBreakdowns, setJobBreakdowns] = useState<any[]>([]);
+    const [properties, setProperties] = useState<any[]>([]);
+    const [leads, setLeads] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    const [dashboardData, setDashboardData] = useState<any>(null);
-    const [properties, setProperties] = useState<any[]>([]);
-    const [workOrders, setWorkOrders] = useState<any[]>([]);
-    const [revenueStats, setRevenueStats] = useState<any>(null);
-    const [roiAnalytics, setRoiAnalytics] = useState<any>(null);
 
     const [activeTab, setActiveTab] = useState<'overview' | 'orders' | 'leads' | 'properties'>('overview');
     const [ordersFilter, setOrdersFilter] = useState<'active' | 'closed' | 'pending' | 'history'>('active');
-
-    // Leads State
-    const [leads, setLeads] = useState<any[]>([]);
     const [isLeadModalOpen, setIsLeadModalOpen] = useState(false);
 
     useEffect(() => {
-        const fetchDashboardData = async () => {
-            try {
-                setLoading(true);
-                setError(null);
-
-                const [dashboard, propertiesData, workOrdersData, revenue, roi] = await Promise.all([
-                    investorApiService.getDashboard(),
-                    investorApiService.getProperties(),
-                    investorApiService.getActiveWorkOrders(),
-                    investorApiService.getRevenueStatistics('6m'),
-                    investorApiService.getROIAnalytics()
-                ]);
-
-                setDashboardData(dashboard);
-                setProperties(propertiesData.results || propertiesData);
-                setWorkOrders(workOrdersData.results || workOrdersData);
-                setRevenueStats(revenue);
-                setRoiAnalytics(roi);
-            } catch (err) {
-                console.error('Failed to fetch investor dashboard data:', err);
-                setError(err instanceof Error ? err.message : 'Failed to load dashboard data');
-            } finally {
-                setLoading(false);
-            }
-        };
-
-        fetchDashboardData();
+        loadDashboardData();
     }, []);
+
+    const loadDashboardData = async () => {
+        try {
+            setLoading(true);
+            setError(null);
+            
+            const [dashboard, breakdowns, propertiesData, leadsData] = await Promise.all([
+                investorApi.getDashboard(),
+                investorApi.getJobBreakdowns(),
+                investorApi.getProperties(),
+                investorApi.getLeads()
+            ]);
+            
+            setDashboardData(dashboard);
+            setJobBreakdowns(breakdowns.breakdowns || []);
+            setProperties(propertiesData.properties || []);
+            setLeads(leadsData.leads || []);
+        } catch (err: any) {
+            console.error('Failed to load dashboard data:', err);
+            setError('Failed to load dashboard data. Please try again.');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // Refresh Leads
+    const refreshLeads = () => {
+        loadDashboardData();
+    };
 
     if (loading) {
         return (
-            <PortalLayout title="Investor Dashboard" navItems={navItems}>
-                <div className="flex items-center justify-center h-64">
-                    <Loader2 className="w-8 h-8 animate-spin text-purple-600" />
-                    <span className="ml-2 text-gray-600">Loading dashboard...</span>
-                </div>
-            </PortalLayout>
+            <div className="min-h-[calc(100vh-4rem)] flex items-center justify-center">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
+            </div>
         );
     }
 
     if (error) {
         return (
-            <PortalLayout title="Investor Dashboard" navItems={navItems}>
-                <div className="flex items-center justify-center h-64">
-                    <div className="text-center">
-                        <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
-                        <p className="text-red-600 mb-4">{error}</p>
-                        <Button onClick={() => window.location.reload()}>Retry</Button>
-                    </div>
+            <div className="min-h-[calc(100vh-4rem)] flex items-center justify-center">
+                <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 max-w-md">
+                    <p className="text-red-700 dark:text-red-400">{error}</p>
+                    <button 
+                        onClick={loadDashboardData}
+                        className="mt-2 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
+                    >
+                        Retry
+                    </button>
                 </div>
-            </PortalLayout>
+            </div>
         );
     }
 
-    // Refresh Leads
-    const refreshLeads = () => {
-        setLeads([...leads]);
-    };
+    // Extract data from API response with fallbacks
+    const investor = dashboardData?.investor || { name: 'Investor', email: 'investor@apex.inc' };
+    const activeProjects = dashboardData?.active_projects || 0;
+    const totalRevenue = dashboardData?.total_revenue || 0;
+    const netProfit = dashboardData?.net_profit || 0;
+    const avgRoi = dashboardData?.avg_roi || 0;
 
-    // Compute metrics from API data
-    const activeProjects = dashboardData?.active_projects || workOrders.filter((w: any) => ['Open', 'InProgress', 'open', 'in_progress'].includes(w.status)).length;
-    const totalRevenue = dashboardData?.total_revenue || revenueStats?.total_revenue || 0;
-    const netProfit = dashboardData?.net_profit || (totalRevenue - (totalRevenue * 0.15));
-    const avgRoi = dashboardData?.average_roi || roiAnalytics?.average_roi || 861.5;
-
-    // Graph Data from API or fallback
-    const roiData = revenueStats?.roi_data || [
+    // Graph Data from API or fallbacks
+    const roiData = dashboardData?.roi_data || [
         { month: 'Jan', value: 12 },
         { month: 'Feb', value: 19 },
         { month: 'Mar', value: 15 },
@@ -147,10 +140,10 @@ export default function InvestorDashboard() {
         { month: 'Jul', value: 32 },
     ];
 
-    const allocationData = dashboardData?.portfolio_allocation || [
-        { name: 'Flips', value: 65, color: '#8b5cf6' }, // Purple
-        { name: 'Rentals', value: 25, color: '#ec4899' }, // Pink
-        { name: 'Commercial', value: 10, color: '#3b82f6' }, // Blue
+    const allocationData = dashboardData?.allocation_data || [
+        { name: 'Flips', value: 65, color: '#8b5cf6' },
+        { name: 'Rentals', value: 25, color: '#ec4899' },
+        { name: 'Commercial', value: 10, color: '#3b82f6' },
     ];
 
     // Sync tab with URL path
@@ -170,15 +163,15 @@ export default function InvestorDashboard() {
     const getFilteredJobs = () => {
         switch (ordersFilter) {
             case 'active':
-                return workOrders.filter((j: any) => ['Open', 'InProgress', 'open', 'in_progress'].includes(j.status));
+                return investorJobs.filter(j => ['Open', 'InProgress'].includes(j.status));
             case 'closed':
-                return workOrders.filter((j: any) => ['Complete', 'Paid', 'completed', 'paid'].includes(j.status));
+                return investorJobs.filter(j => ['Complete', 'Paid'].includes(j.status));
             case 'pending':
-                return workOrders.filter((j: any) => j.status === 'Complete' || j.status === 'completed');
+                return investorJobs.filter(j => j.status === 'Complete');
             case 'history':
-                return workOrders.filter((j: any) => j.status === 'Paid' || j.status === 'paid');
+                return investorJobs.filter(j => j.status === 'Paid');
             default:
-                return workOrders;
+                return investorJobs;
         }
     };
 
@@ -200,7 +193,7 @@ export default function InvestorDashboard() {
                 {/* 1. Gradient Welcome Header */}
                 <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-fuchsia-600 to-purple-800 p-8 shadow-2xl">
                     <div className="relative z-10 text-white">
-                        <h1 className="text-3xl font-bold mb-2">Welcome, {dashboardData?.investor_name || 'Investor'}!</h1>
+                        <h1 className="text-3xl font-bold mb-2">Welcome, {investor?.name || 'Investor'}!</h1>
                         <p className="text-purple-100 opacity-90">Investment Portfolio Overview</p>
                     </div>
                     <div className="absolute right-0 top-0 h-full w-1/3 opacity-10">
@@ -289,7 +282,7 @@ export default function InvestorDashboard() {
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                                 <div className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-4 border border-gray-100 dark:border-gray-700/50 text-center">
                                     <p className="text-gray-500 dark:text-gray-400 text-xs uppercase font-bold tracking-wider mb-2">Apex Earnings (Platform)</p>
-                                    <p className="text-2xl font-bold text-gray-900 dark:text-white">{formatCurrency(dashboardData?.platform_earnings || 750)}</p>
+                                    <p className="text-2xl font-bold text-gray-900 dark:text-white">$750.00</p>
                                     <p className="text-xs text-gray-500 mt-1">15% Service Fee</p>
                                 </div>
                                 <div className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-4 border border-gray-100 dark:border-gray-700/50 text-center">
@@ -299,7 +292,7 @@ export default function InvestorDashboard() {
                                 </div>
                                 <div className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-4 border border-gray-100 dark:border-gray-700/50 text-center">
                                     <p className="text-gray-500 dark:text-gray-400 text-xs uppercase font-bold tracking-wider mb-2">Total Payouts Received</p>
-                                    <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">{formatCurrency(dashboardData?.total_payouts || 3584)}</p>
+                                    <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">$3,584.00</p>
                                     <p className="text-xs text-gray-500 mt-1">Cash Distributed</p>
                                 </div>
                             </div>
@@ -374,10 +367,10 @@ export default function InvestorDashboard() {
                     <div className="space-y-6">
                         <div className="flex gap-2 border-b border-gray-200 dark:border-gray-800 pb-1">
                             {[
-                                { id: 'active', label: 'Active Jobs', count: workOrders.filter((j: any) => ['Open', 'InProgress', 'open', 'in_progress'].includes(j.status)).length },
-                                { id: 'closed', label: 'Closed Jobs', count: workOrders.filter((j: any) => ['Complete', 'Paid', 'completed', 'paid'].includes(j.status)).length },
-                                { id: 'pending', label: 'Pending Payouts', count: workOrders.filter((j: any) => j.status === 'Complete' || j.status === 'completed').length },
-                                { id: 'history', label: 'Payout History', count: workOrders.filter((j: any) => j.status === 'Paid' || j.status === 'paid').length },
+                                { id: 'active', label: 'Active Jobs', count: investorJobs.filter(j => ['Open', 'InProgress'].includes(j.status)).length },
+                                { id: 'closed', label: 'Closed Jobs', count: investorJobs.filter(j => ['Complete', 'Paid'].includes(j.status)).length },
+                                { id: 'pending', label: 'Pending Payouts', count: investorJobs.filter(j => j.status === 'Complete').length },
+                                { id: 'history', label: 'Payout History', count: investorJobs.filter(j => j.status === 'Paid').length },
                             ].map((tab) => (
                                 <button
                                     key={tab.id}
@@ -400,7 +393,8 @@ export default function InvestorDashboard() {
 
                         <div className="space-y-4">
                             {filteredJobs.length > 0 ? (
-                                filteredJobs.map((job: any) => {
+                                filteredJobs.map((job: Job) => {
+                                    const breakdown = investorJobBreakdown.find(b => b.jobId === job.id);
                                     return (
                                         <Card key={job.id} className="hover:shadow-md transition-shadow group cursor-pointer" onClick={() => navigate(`/investor/property/${job.id}`)}>
                                             <div className="flex justify-between items-start">
@@ -409,26 +403,28 @@ export default function InvestorDashboard() {
                                                         <Briefcase className="w-6 h-6" />
                                                     </div>
                                                     <div>
-                                                        <h3 className="font-semibold text-gray-900 dark:text-white text-lg">{job.property_address || job.propertyAddress}</h3>
+                                                        <h3 className="font-semibold text-gray-900 dark:text-white text-lg">{job.propertyAddress}</h3>
                                                         <p className="text-sm text-gray-500 dark:text-gray-400 flex items-center gap-2 mt-1">
-                                                            <span>{job.city || job.location} • #{job.id}</span>
-                                                            {(job.scheduled_time || job.scheduledTime) && (
+                                                            <span>{job.city} • #{job.id}</span>
+                                                            {job.scheduledTime && (
                                                                 <span className="flex items-center gap-1 text-xs bg-gray-50 dark:bg-gray-800 px-2 py-0.5 rounded text-gray-500">
                                                                     <Calendar className="w-3 h-3" />
-                                                                    {formatDate(job.scheduled_time || job.scheduledTime)}
+                                                                    {formatDate(job.scheduledTime)}
                                                                 </span>
                                                             )}
                                                         </p>
 
-                                                        {job.roi_data && (
+                                                        {breakdown && (
                                                             <div className="flex items-center gap-4 mt-2 text-xs">
                                                                 <span className="text-gray-600 dark:text-gray-400 font-medium bg-gray-50 dark:bg-gray-800 px-2 py-1 rounded">
                                                                     ROI: <span className="text-green-600 dark:text-green-400">
-                                                                        {job.roi_data.percentage || job.roi}%
+                                                                        {breakdown.expenses > 0
+                                                                            ? ((breakdown.investorShare / breakdown.expenses) * 100).toFixed(1)
+                                                                            : breakdown.roi}%
                                                                     </span>
                                                                 </span>
                                                                 <span className="text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-gray-800 px-2 py-1 rounded">
-                                                                    Share: {job.profit_split?.investor || 70}%
+                                                                    Share: {breakdown.profitSplit?.investor}%
                                                                 </span>
                                                             </div>
                                                         )}
@@ -436,17 +432,17 @@ export default function InvestorDashboard() {
                                                 </div>
                                                 <div className="text-right">
                                                     <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Status</p>
-                                                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${(job.status === 'Paid' || job.status === 'paid') ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' :
-                                                            (job.status === 'Complete' || job.status === 'completed') ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400' :
+                                                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${job.status === 'Paid' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' :
+                                                            job.status === 'Complete' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400' :
                                                                 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400'
                                                         }`}>
-                                                        {(job.status === 'Complete' || job.status === 'completed') ? 'Pending Payout' : job.status}
+                                                        {job.status === 'Complete' ? 'Pending Payout' : job.status}
                                                     </span>
-                                                    {job.investor_share && (
+                                                    {breakdown && (
                                                         <div className="mt-2 text-right">
                                                             <p className="text-xs text-gray-500 dark:text-gray-400">My Profit</p>
                                                             <p className="font-bold text-gray-900 dark:text-white">
-                                                                {formatCurrency(job.investor_share)}
+                                                                {formatCurrency(breakdown.investorShare)}
                                                             </p>
                                                         </div>
                                                     )}

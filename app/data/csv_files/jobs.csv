@@ -1,0 +1,4 @@
+id,job_number,customer_name,property_address,status,trade,estimated_cost,actual_cost,assigned_contractor_id,created_at
+101,JOB-20241201-001,John Smith,123 Main St,InProgress,Painting,5000,4800,2,2024-12-01
+102,JOB-20241202-002,Jane Doe,456 Oak Ave,Open,Plumbing,3000,,,2024-12-02
+103,JOB-20241203-003,Bob Wilson,789 Pine St,Complete,Electrical,4000,3900,2,2024-12-03

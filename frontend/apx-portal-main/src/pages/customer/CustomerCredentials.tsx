@@ -1,43 +1,27 @@
 
-import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import Card from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
-import { CheckCircle, Copy, Lock, ArrowRight, ShieldCheck, Loader2 } from 'lucide-react';
+import { CheckCircle, Copy, Lock, ArrowRight, ShieldCheck } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
-import { customerApiService } from '@/lib/customerApi';
+import { getUserByEmail } from '@/data/mockData';
 
 export default function CustomerCredentials() {
     const navigate = useNavigate();
     const location = useLocation();
     const { login } = useAuth();
-    
-    const [loading, setLoading] = useState(false);
-    const [credentials, setCredentials] = useState<any>(null);
 
-    useEffect(() => {
-        // Get credentials from location state or generate them
-        const passedEmail = location.state?.email;
-        const message = location.state?.message;
-        
-        if (passedEmail) {
-            // In a real app, these would come from the backend after quote approval
-            setCredentials({
-                email: passedEmail,
-                password: 'apex-temp-pass',
-                portalLink: window.location.origin + '/customer/dashboard',
-                message: message || 'Your quote has been approved and your project has started!'
-            });
-        } else {
-            // Default demo credentials
-            setCredentials({
-                email: 'customer@apex.com',
-                password: 'apex-temp-pass',
-                portalLink: window.location.origin + '/customer/dashboard',
-                message: 'Welcome to your customer portal!'
-            });
-        }
-    }, [location.state]);
+    // Determine valid email: use passed email if valid user exists, otherwise default to demo customer
+    const passedEmail = location.state?.email;
+    const isValidUser = passedEmail && getUserByEmail(passedEmail);
+    const emailToUse = isValidUser ? passedEmail : 'customer@apex.com';
+
+    // In a real app, these would come from the backend response after approval
+    const tempCredentials = {
+        email: emailToUse,
+        password: 'apex-temp-pass',
+        portalLink: window.location.origin + '/customer/dashboard'
+    };
 
     const handleCopy = (text: string) => {
         navigator.clipboard.writeText(text);
@@ -45,28 +29,15 @@ export default function CustomerCredentials() {
     };
 
     const handleDirectAccess = async () => {
-        if (!credentials) return;
-        
         try {
-            setLoading(true);
-            // In a real app, this would use the actual login API
-            await login(credentials.email);
+            // Mock auto-login for the smooth flow
+            await login(tempCredentials.email);
             navigate('/customer/dashboard');
         } catch (error) {
-            console.error('Login failed:', error);
-            alert("Login failed. Please try again or contact support.");
-        } finally {
-            setLoading(false);
+            console.error(error);
+            alert("Login failed: User mismatch. Please ensure the quote email matches a registered user.");
         }
     };
-
-    if (!credentials) {
-        return (
-            <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center p-4">
-                <Loader2 className="w-8 h-8 animate-spin text-purple-600" />
-            </div>
-        );
-    }
 
     return (
         <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center p-4">
@@ -77,7 +48,7 @@ export default function CustomerCredentials() {
                     </div>
                     <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">Quote Approved!</h1>
                     <p className="text-gray-600 dark:text-gray-400">
-                        {credentials.message}
+                        Your project has been officially started. We've created a secure portal for you to track progress.
                     </p>
                 </div>
 
@@ -96,9 +67,9 @@ export default function CustomerCredentials() {
                                 <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">Username / Email</label>
                                 <div className="mt-1 flex gap-2">
                                     <code className="flex-1 bg-gray-100 dark:bg-gray-800 p-3 rounded-lg text-gray-800 dark:text-gray-200 font-mono">
-                                        {credentials.email}
+                                        {tempCredentials.email}
                                     </code>
-                                    <Button variant="outline" size="sm" onClick={() => handleCopy(credentials.email)}>
+                                    <Button variant="outline" size="sm" onClick={() => handleCopy(tempCredentials.email)}>
                                         <Copy className="w-4 h-4" />
                                     </Button>
                                 </div>
@@ -108,9 +79,9 @@ export default function CustomerCredentials() {
                                 <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">Temporary Password</label>
                                 <div className="mt-1 flex gap-2">
                                     <code className="flex-1 bg-gray-100 dark:bg-gray-800 p-3 rounded-lg text-gray-800 dark:text-gray-200 font-mono">
-                                        {credentials.password}
+                                        {tempCredentials.password}
                                     </code>
-                                    <Button variant="outline" size="sm" onClick={() => handleCopy(credentials.password)}>
+                                    <Button variant="outline" size="sm" onClick={() => handleCopy(tempCredentials.password)}>
                                         <Copy className="w-4 h-4" />
                                     </Button>
                                 </div>
@@ -121,15 +92,10 @@ export default function CustomerCredentials() {
                             <Button
                                 className="w-full h-12 text-lg shadow-xl shadow-purple-500/20"
                                 onClick={handleDirectAccess}
-                                disabled={loading}
                             >
-                                {loading ? (
-                                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                                ) : (
-                                    <Lock className="w-4 h-4 mr-2" />
-                                )}
+                                <Lock className="w-4 h-4 mr-2" />
                                 Access Portal Now
-                                {!loading && <ArrowRight className="w-4 h-4 ml-2" />}
+                                <ArrowRight className="w-4 h-4 ml-2" />
                             </Button>
                             <p className="text-xs text-center text-gray-400 mt-4">
                                 You can change your password in the Settings tab later.

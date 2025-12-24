@@ -1,54 +1,31 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import Card from '@/components/ui/Card';
 import Badge, { getStatusBadgeVariant } from '@/components/ui/Badge';
+import { jobs } from '@/data/mockData';
 import { formatCurrency } from '@/lib/utils';
 import { Search } from 'lucide-react';
 
 export default function InvestorWorkOrders() {
     const [filter, setFilter] = useState<'all' | 'active' | 'completed' | 'pending'>('all');
     const [searchTerm, setSearchTerm] = useState('');
-    const [workOrders, setWorkOrders] = useState([]);
-    const [loading, setLoading] = useState(true);
 
-    useEffect(() => {
-        fetchWorkOrders();
-    }, []);
+    const allWorkOrders = jobs.filter(j => j.isProject);
 
-    const fetchWorkOrders = async () => {
-        try {
-            const response = await fetch('/api/jobs/?is_project=true', {
-                headers: {
-                    'Authorization': `Bearer ${localStorage.getItem('token')}`
-                }
-            });
-            if (response.ok) {
-                const data = await response.json();
-                setWorkOrders(data);
-            }
-        } catch (error) {
-            console.error('Error fetching work orders:', error);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const filteredOrders = workOrders.filter((job: any) => {
-        const matchesSearch = job.property_address?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            job.city?.toLowerCase().includes(searchTerm.toLowerCase());
+    const filteredOrders = allWorkOrders.filter(job => {
+        const matchesSearch = job.propertyAddress.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            job.city.toLowerCase().includes(searchTerm.toLowerCase());
 
         if (!matchesSearch) return false;
 
         if (filter === 'all') return true;
         if (filter === 'active') return job.status === 'InProgress' || job.status === 'Open';
         if (filter === 'completed') return job.status === 'Complete';
+        // Mock logic for pending payout - strictly existing logic implies 'Complete' might still be pending, 
+        // but for now let's just use status. 
         if (filter === 'pending') return job.status === 'Complete';
 
         return true;
     });
-
-    if (loading) {
-        return <div className="text-center py-8">Loading work orders...</div>;
-    }
 
     return (
         <div className="space-y-6">
@@ -110,7 +87,7 @@ export default function InvestorWorkOrders() {
                                     <tr key={job.id} className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition">
                                         <td className="py-3 px-4 font-mono text-xs text-gray-500">#{job.id}</td>
                                         <td className="py-3 px-4">
-                                            <p className="font-medium text-gray-900 dark:text-white">{job.property_address}</p>
+                                            <p className="font-medium text-gray-900 dark:text-white">{job.propertyAddress}</p>
                                             <p className="text-xs text-gray-500">{job.city}</p>
                                         </td>
                                         <td className="py-3 px-4 text-gray-700 dark:text-gray-300 capitalize">{job.trade}</td>

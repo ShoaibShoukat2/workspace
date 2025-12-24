@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import PortalLayout from '@/components/PortalLayout';
 import Card from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
@@ -8,70 +8,42 @@ import {
     Plus,
     ChevronRight,
     CheckCircle,
-    AlertTriangle
+    AlertTriangle,
+    ArrowRight
 } from 'lucide-react';
+import { projects } from '@/data/mockData';
+import { Project, ProjectStatus, SubtaskStatus } from '@/types';
 
 export default function ProjectManagement() {
     const [viewMode, setViewMode] = useState<'list' | 'detail'>('list');
-    const [selectedProject, setSelectedProject] = useState<any | null>(null);
-    const [projects, setProjects] = useState<any[]>([]);
-    const [loading, setLoading] = useState(true);
+    const [selectedProject, setSelectedProject] = useState<Project | null>(null);
 
-    useEffect(() => {
-        fetchProjects();
-    }, []);
-
-    const fetchProjects = async () => {
-        try {
-            const response = await fetch('/api/projects/', {
-                headers: {
-                    'Authorization': `Bearer ${localStorage.getItem('token')}`
-                }
-            });
-            if (response.ok) {
-                const data = await response.json();
-                setProjects(data);
-            }
-        } catch (error) {
-            console.error('Error fetching projects:', error);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const handleViewProject = (project: any) => {
+    const handleViewProject = (project: Project) => {
         setSelectedProject(project);
         setViewMode('detail');
     };
 
-    const getStatusVariant = (status: string) => {
+    const getStatusVariant = (status: ProjectStatus) => {
         switch (status) {
             case 'Setup': return 'warning';
+            // case 'Ready': return 'info'; // Ready not in ProjectStatus type anymore? Check type def. Setup | AdminApproved | InProgress | Completed
             case 'AdminApproved': return 'info';
-            case 'InProgress': return 'default';
+            case 'InProgress': return 'default'; // primary not supported
             case 'Completed': return 'success';
             default: return 'default';
         }
     };
 
-    const getSubtaskStatusVariant = (status: string) => {
+    const getSubtaskStatusVariant = (status: SubtaskStatus) => {
         switch (status) {
             case 'NotStarted': return 'default';
             case 'MaterialsVerified': return 'info';
-            case 'InProgress': return 'default';
+            case 'InProgress': return 'default'; // primary not supported
             case 'Blocked': return 'danger';
             case 'Completed': return 'success';
             default: return 'default';
         }
     };
-
-    if (loading) {
-        return (
-            <PortalLayout title="Project Management" navItems={[]}>
-                <div className="text-center py-8">Loading projects...</div>
-            </PortalLayout>
-        );
-    }
 
     return (
         <PortalLayout title="Project Management" navItems={[]}>
@@ -110,16 +82,18 @@ export default function ProjectManagement() {
                                         </div>
                                         <div>
                                             <h3 className="font-bold text-gray-900 dark:text-white">{project.name}</h3>
-                                            <p className="text-sm text-gray-500">{project.property_address}</p>
+                                            <p className="text-sm text-gray-500">{project.propertyAddress}</p>
                                         </div>
                                     </div>
 
                                     <div className="flex items-center gap-6 w-full md:w-auto justify-between md:justify-end">
                                         <div className="flex items-center gap-2 text-sm text-gray-500">
-                                            <span>{project.trades?.length || 0} Trades</span>
+                                            {/* <Users className="w-4 h-4" /> */}
+                                            <span>{project.trades.length} Trades</span>
                                         </div>
                                         <div className="flex items-center gap-2 text-sm text-gray-500">
-                                            <span>{project.subtasks?.length || 0} Phases</span>
+                                            {/* <Layers className="w-4 h-4" /> */}
+                                            <span>{project.subtasks.length} Phases</span>
                                         </div>
                                         <Badge variant={getStatusVariant(project.status)}>
                                             {project.status.toUpperCase()}
@@ -138,17 +112,17 @@ export default function ProjectManagement() {
                                 <div className="text-white/80 text-sm mb-1">Status</div>
                                 <div className="text-2xl font-bold flex items-center gap-2">
                                     {selectedProject.status}
-                                    {selectedProject.admin_approved && <CheckCircle className="w-5 h-5" />}
+                                    {selectedProject.adminApproved && <CheckCircle className="w-5 h-5" />}
                                 </div>
                                 <div className="mt-4 text-xs bg-white/20 p-2 rounded-lg inline-block">
-                                    {selectedProject.admin_approved ? 'Admin Approved' : 'Waiting Approval'}
+                                    {selectedProject.adminApproved ? 'Admin Approved' : 'Waiting Approval'}
                                 </div>
                             </Card>
 
                             <Card>
                                 <div className="text-gray-500 text-sm mb-1">Active Trades</div>
                                 <div className="flex flex-wrap gap-2 mt-2">
-                                    {selectedProject.trades?.map((t: string) => (
+                                    {selectedProject.trades.map(t => (
                                         <Badge key={t} variant="default">{t}</Badge>
                                     ))}
                                 </div>
@@ -157,7 +131,7 @@ export default function ProjectManagement() {
                             <Card>
                                 <div className="text-gray-500 text-sm mb-1">Total Estimated Hours</div>
                                 <div className="text-2xl font-bold text-gray-900 dark:text-white">
-                                    {selectedProject.subtasks?.reduce((acc: number, curr: any) => acc + (curr.estimated_time || 0), 0)} hrs
+                                    {selectedProject.subtasks.reduce((acc, curr) => acc + curr.estimatedTime, 0)} hrs
                                 </div>
                             </Card>
                         </div>
@@ -166,7 +140,7 @@ export default function ProjectManagement() {
                         <Card>
                             <div className="mb-4 font-bold text-lg border-b pb-2">Project Timeline & Subtasks</div>
                             <div className="space-y-4">
-                                {selectedProject.subtasks?.map((task: any, index: number) => (
+                                {selectedProject.subtasks.map((task, index) => (
                                     <div key={task.id} className="relative pl-8 pb-8 last:pb-0 border-l-2 border-dashed border-gray-200 dark:border-gray-700">
                                         <div className={`absolute -left-[9px] top-0 w-4 h-4 rounded-full border-2 border-white dark:border-gray-800 ${task.status === 'Completed' ? 'bg-green-500' :
                                             task.status === 'InProgress' ? 'bg-blue-500' :
@@ -181,7 +155,7 @@ export default function ProjectManagement() {
                                                         {task.status}
                                                     </Badge>
                                                 </div>
-                                                <p className="text-sm text-gray-500">Estimated: {task.estimated_time || 0} hrs • Job ID: {task.job_id || 'N/A'}</p>
+                                                <p className="text-sm text-gray-500">Estimated: {task.estimatedTime} hrs • Job ID: {task.jobId || 'N/A'}</p>
 
                                                 {task.status === 'Blocked' && (
                                                     <p className="text-xs text-red-500 mt-2 font-medium flex items-center">

@@ -1,0 +1,6 @@
+id,email,password_hash,full_name,role,is_active,created_at
+1,admin@apex.inc,$2b$12$hash1,Admin User,ADMIN,True,2024-01-01
+2,contractor@apex.inc,$2b$12$hash2,John Contractor,CONTRACTOR,True,2024-01-01
+3,customer@apex.inc,$2b$12$hash3,Jane Customer,CUSTOMER,True,2024-01-01
+4,investor@apex.inc,$2b$12$hash4,Bob Investor,INVESTOR,True,2024-01-01
+5,fm@apex.inc,$2b$12$hash5,Alice FM,FM,True,2024-01-01

@@ -1,10 +1,9 @@
 import { useParams, useNavigate } from 'react-router-dom';
-import { useState, useEffect } from 'react';
 import PortalLayout from '@/components/PortalLayout';
 import Card from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import Badge from '@/components/ui/Badge';
-import { investorApiService } from '@/lib/investorApi';
+import { jobs, investorJobBreakdown } from '@/data/mockData';
 import { formatCurrency } from '@/lib/utils';
 import {
     ArrowLeft,
@@ -23,40 +22,20 @@ export default function PropertyDetailView() {
     const navigate = useNavigate();
     const decodedAddress = decodeURIComponent(address || '');
 
-    const [property, setProperty] = useState<any>(null);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
+    const propertyJobs = jobs.filter(j => j.propertyAddress === decodedAddress && j.type === 'investor');
 
-    useEffect(() => {
-        const fetchPropertyData = async () => {
-            try {
-                setLoading(true);
-                setError(null);
-                
-                // Get all properties and find the one matching the address
-                const propertiesResponse = await investorApiService.getProperties();
-                const matchingProperty = propertiesResponse.results.find(
-                    (p: any) => p.address === decodedAddress
-                );
-                
-                if (matchingProperty) {
-                    // Get detailed property data including jobs
-                    const propertyDetail = await investorApiService.getPropertyDetail(matchingProperty.id);
-                    setProperty(propertyDetail);
-                } else {
-                    setError('Property not found');
-                }
-            } catch (err) {
-                setError(err instanceof Error ? err.message : 'Failed to load property data');
-            } finally {
-                setLoading(false);
-            }
-        };
+    // Aggregates
+    const totalRevenue = propertyJobs.reduce((sum, j) => {
+        const bd = investorJobBreakdown.find(b => b.jobId === j.id);
+        return sum + (bd?.revenue || 0);
+    }, 0);
 
-        if (decodedAddress) {
-            fetchPropertyData();
-        }
-    }, [decodedAddress]);
+    const totalProfit = propertyJobs.reduce((sum, j) => {
+        const bd = investorJobBreakdown.find(b => b.jobId === j.id);
+        return sum + (bd?.investorShare || 0);
+    }, 0);
+
+    const issueCount = propertyJobs.filter(j => j.disputeId).length;
 
     // Standard Investor Navigation
     const navItems = [
@@ -67,29 +46,16 @@ export default function PropertyDetailView() {
         { label: 'Reports', path: '/investor/reports', icon: <PieChartIcon className="w-5 h-5" /> },
     ];
 
-    if (loading) {
+    if (!decodedAddress || propertyJobs.length === 0) {
         return (
-            <PortalLayout title="Loading Property..." navItems={navItems}>
-                <div className="flex items-center justify-center py-12">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
-                    <span className="ml-3 text-gray-600 dark:text-gray-400">Loading property details...</span>
+            <PortalLayout title="Property Not Found" navItems={navItems}>
+                <div className="p-8 text-center">
+                    <h2 className="text-xl font-bold text-gray-900 dark:text-white">Property Not Found</h2>
+                    <Button className="mt-4" onClick={() => navigate('/investor/dashboard')}>Back to Dashboard</Button>
                 </div>
             </PortalLayout>
         );
     }
-
-    if (error || !property) {
-        return (
-            <PortalLayout title="Property Not Found" navItems={navItems}>
-                <Card className="text-center py-12">
-                    <p className="text-red-600 dark:text-red-400 mb-4">{error || "Property not found."}</p>
-                    <Button onClick={() => navigate('/investor/dashboard')}>Back to Dashboard</Button>
-                </Card>
-            </PortalLayout>
-        );
-    }
-
-    const issueCount = property.jobs?.filter((job: any) => job.status === 'disputed').length || 0;
 
     return (
         <PortalLayout title={`Property: ${decodedAddress}`} navItems={navItems}>
@@ -104,9 +70,9 @@ export default function PropertyDetailView() {
                     <div>
                         <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center">
                             <Building className="w-6 h-6 mr-3 text-purple-600" />
-                            {property.address}
+                            {decodedAddress}
                         </h1>
-                        <p className="text-gray-500 dark:text-gray-400 ml-9">{property.city || 'Property Details'}</p>
+                        <p className="text-gray-500 dark:text-gray-400 ml-9">{propertyJobs[0].city}</p>
                     </div>
                 </div>
 
@@ -114,24 +80,24 @@ export default function PropertyDetailView() {
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     <Card>
                         <div className="flex items-center justify-between mb-2">
-                            <h3 className="text-sm font-medium text-gray-500">Total Investment</h3>
+                            <h3 className="text-sm font-medium text-gray-500">Total Profit</h3>
                             <DollarSign className="w-5 h-5 text-green-500" />
                         </div>
-                        <p className="text-3xl font-bold text-gray-900 dark:text-white">{formatCurrency(property.total_investment || 0)}</p>
+                        <p className="text-3xl font-bold text-gray-900 dark:text-white">{formatCurrency(totalProfit)}</p>
                     </Card>
                     <Card>
                         <div className="flex items-center justify-between mb-2">
-                            <h3 className="text-sm font-medium text-gray-500">Current Revenue</h3>
+                            <h3 className="text-sm font-medium text-gray-500">Revenue</h3>
                             <TrendingUp className="w-5 h-5 text-blue-500" />
                         </div>
-                        <p className="text-3xl font-bold text-gray-900 dark:text-white">{formatCurrency(property.current_revenue || 0)}</p>
+                        <p className="text-3xl font-bold text-gray-900 dark:text-white">{formatCurrency(totalRevenue)}</p>
                     </Card>
                     <Card>
                         <div className="flex items-center justify-between mb-2">
-                            <h3 className="text-sm font-medium text-gray-500">ROI</h3>
+                            <h3 className="text-sm font-medium text-gray-500">Active Jobs</h3>
                             <FileText className="w-5 h-5 text-purple-500" />
                         </div>
-                        <p className="text-3xl font-bold text-gray-900 dark:text-white">{property.roi_percentage || 0}%</p>
+                        <p className="text-3xl font-bold text-gray-900 dark:text-white">{propertyJobs.filter(j => ['Open', 'InProgress'].includes(j.status)).length}</p>
                     </Card>
                 </div>
 
@@ -146,40 +112,33 @@ export default function PropertyDetailView() {
                 {/* Jobs List */}
                 <Card>
                     <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-6">Work Orders History</h2>
-                    {property.jobs && property.jobs.length > 0 ? (
-                        <div className="space-y-4">
-                            {property.jobs.map((job: any) => (
+                    <div className="space-y-4">
+                        {propertyJobs.map(job => {
+                            const breakdown = investorJobBreakdown.find(b => b.jobId === job.id);
+                            return (
                                 <div key={job.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-4 border border-gray-100 dark:border-gray-800 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
                                     <div className="space-y-1 mb-4 sm:mb-0">
                                         <div className="flex items-center gap-2">
                                             <span className="font-semibold text-gray-900 dark:text-white">Job #{job.id}</span>
-                                            <Badge variant={job.status === 'Complete' ? 'success' : job.status === 'InProgress' ? 'warning' : 'default'}>
-                                                {job.status}
-                                            </Badge>
+                                            <Badge variant={job.status === 'Complete' ? 'success' : 'default'}>{job.status}</Badge>
                                         </div>
-                                        <p className="text-sm text-gray-500">{job.created_at ? new Date(job.created_at).toLocaleDateString() : 'N/A'} - {job.title}</p>
+                                        <p className="text-sm text-gray-500">{new Date(job.scheduledTime || '').toLocaleDateString()} - {job.trade}</p>
                                     </div>
 
                                     <div className="flex items-center gap-6">
                                         <div className="text-right">
-                                            <p className="text-xs text-gray-500">Estimated Cost</p>
-                                            <p className="font-medium text-gray-900 dark:text-white">{formatCurrency(job.estimated_cost || 0)}</p>
+                                            <p className="text-xs text-gray-500">Revenue</p>
+                                            <p className="font-medium text-gray-900 dark:text-white">{formatCurrency(breakdown?.revenue || 0)}</p>
                                         </div>
                                         <div className="text-right">
-                                            <p className="text-xs text-gray-500">Actual Cost</p>
-                                            <p className="font-bold text-green-600 dark:text-green-400">{formatCurrency(job.actual_cost || 0)}</p>
+                                            <p className="text-xs text-gray-500">Profit Share</p>
+                                            <p className="font-bold text-green-600 dark:text-green-400">{formatCurrency(breakdown?.investorShare || 0)}</p>
                                         </div>
                                     </div>
                                 </div>
-                            ))}
-                        </div>
-                    ) : (
-                        <div className="text-center py-8">
-                            <FileText className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">No Work Orders</h3>
-                            <p className="text-gray-500">No work orders found for this property.</p>
-                        </div>
-                    )}
+                            )
+                        })}
+                    </div>
                 </Card>
             </div>
         </PortalLayout>

@@ -1,90 +1,43 @@
-import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import Card from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import Badge from '@/components/ui/Badge';
-import { customerApiService } from '@/lib/customerApi';
-import { Hammer, FileText, CheckCircle, AlertTriangle, Loader2 } from 'lucide-react';
+import { getJobByToken, estimates, updateJobStatus } from '@/data/mockData';
+import { Hammer, FileText, CheckCircle, AlertTriangle } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
 
 
 export default function QuoteApproval() {
     const { token } = useParams<{ token: string }>();
     const navigate = useNavigate();
-    
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
-    const [quoteData, setQuoteData] = useState<any>(null);
-    const [processing, setProcessing] = useState(false);
 
-    useEffect(() => {
-        const fetchQuoteData = async () => {
-            if (!token) {
-                setError('No quote token provided');
-                setLoading(false);
-                return;
-            }
+    // Default to 'mock-token-123' if the token from URL is invalid/missing during testing
+    // This fallback ensures the demo always works even with a bad link
+    const effectiveToken = token || 'mock-token-123';
 
-            try {
-                setLoading(true);
-                setError(null);
-                const data = await customerApiService.validateQuoteToken(token);
-                setQuoteData(data);
-            } catch (err) {
-                console.error('Failed to fetch quote data:', err);
-                setError(err instanceof Error ? err.message : 'Failed to load quote');
-            } finally {
-                setLoading(false);
-            }
-        };
+    // We can lookup synchronously from mockData for this demo
+    const job = getJobByToken(effectiveToken) || getJobByToken('mock-token-123');
+    const estimate = job ? estimates.find(e => e.jobId === job.id) : undefined;
+    const loading = false;
 
-        fetchQuoteData();
-    }, [token]);
+    // Derived state for line items (mock logic)
+    // In a real app, these would come from the estimate.lineItems
+    const materialItems = job?.materials || [];
+    const laborMatches = estimate?.scopeOfWork.match(/Labor \((.*?) hours\)/);
+    const laborHours = laborMatches ? parseFloat(laborMatches[1]) : (estimate?.hours || 0);
 
-    const handleApprove = async () => {
-        if (!token || !quoteData) return;
+    const totalMaterialsCost = estimate?.materialEstimate || 0;
+    const totalLaborCost = (estimate?.laborRate || 0) * (estimate?.hours || 0);
 
-        try {
-            setProcessing(true);
-            await customerApiService.approveQuote(token, {
-                approved: true,
-                signature: 'Digital Signature',
-                timestamp: new Date().toISOString()
-            });
-            
+    const handleApprove = () => {
+        if (job) {
+            updateJobStatus(job.id, 'InProgress');
             navigate('/customer/credentials', {
                 state: {
-                    email: quoteData.customer_email,
-                    message: 'Quote approved successfully! Your job will begin soon.'
+                    email: job.customerEmail,
+                    password: 'temp-password-123'
                 }
             });
-        } catch (err) {
-            console.error('Failed to approve quote:', err);
-            alert('Failed to approve quote. Please try again.');
-        } finally {
-            setProcessing(false);
-        }
-    };
-
-    const handleReject = async () => {
-        const reason = prompt('Please provide a reason for rejecting this quote:');
-        if (!reason || !token) return;
-
-        try {
-            setProcessing(true);
-            await customerApiService.approveQuote(token, {
-                approved: false,
-                rejection_reason: reason,
-                timestamp: new Date().toISOString()
-            });
-            
-            alert('Quote rejected. Your Field Manager will contact you soon.');
-            navigate('/');
-        } catch (err) {
-            console.error('Failed to reject quote:', err);
-            alert('Failed to reject quote. Please try again.');
-        } finally {
-            setProcessing(false);
         }
     };
 
@@ -96,40 +49,25 @@ export default function QuoteApproval() {
     if (loading) {
         return (
             <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
-                <div className="text-center">
-                    <Loader2 className="w-8 h-8 animate-spin text-purple-600 mx-auto mb-4" />
-                    <p className="text-gray-500">Loading quote...</p>
-                </div>
+                <p className="text-gray-500">Loading quote...</p>
             </div>
         );
     }
 
-    if (error || !quoteData) {
+    if (!job || !estimate) {
         return (
             <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
                 <Card className="text-center p-8 max-w-md">
                     <AlertTriangle className="w-12 h-12 text-red-500 mx-auto mb-4" />
                     <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-2">Invalid Quote Link</h2>
-                    <p className="text-gray-600 dark:text-gray-400 mb-4">
-                        {error || 'The quote link you used is invalid or has expired. Please contact your Field Manager.'}
+                    <p className="text-gray-600 dark:text-gray-400">
+                        The quote link you used is invalid or has expired. Please contact your Field Manager.
                     </p>
                     <p className="text-xs text-gray-400 mt-4">Token: {token}</p>
-                    <Button onClick={() => window.location.reload()} className="mt-4">
-                        Retry
-                    </Button>
                 </Card>
             </div>
         );
     }
-
-    // Extract data from API response
-    const job = quoteData.job || quoteData;
-    const estimate = quoteData.estimate || quoteData;
-    const materialItems = job.materials || estimate.line_items || [];
-    const laborHours = estimate.labor_hours || estimate.hours || 0;
-    const totalMaterialsCost = estimate.material_cost || estimate.materialEstimate || 0;
-    const totalLaborCost = estimate.labor_cost || ((estimate.labor_rate || 0) * laborHours);
-    const totalPrice = estimate.total_price || estimate.price || 0;
 
     return (
         <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-4 md:p-8">
@@ -139,11 +77,11 @@ export default function QuoteApproval() {
                     <div>
                         <h1 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white">Review Quote</h1>
                         <p className="text-gray-600 dark:text-gray-400">
-                            For {job.property_address || job.propertyAddress}
+                            For {job.propertyAddress}
                         </p>
                     </div>
                     <Badge variant="info" className="self-start md:self-auto">
-                        Estimate #{estimate.id || estimate.estimate_id}
+                        Estimate #{estimate.id}
                     </Badge>
                 </div>
 
@@ -158,7 +96,7 @@ export default function QuoteApproval() {
                                 Scope of Work
                             </h2>
                             <p className="text-gray-700 dark:text-gray-300 whitespace-pre-line">
-                                {estimate.scope_of_work || estimate.scopeOfWork}
+                                {estimate.scopeOfWork}
                                 {laborHours > 0 && `\n\nLabor: ~${laborHours} hours estimated.`}
                             </p>
                         </Card>
@@ -171,14 +109,15 @@ export default function QuoteApproval() {
                             </h2>
                             {materialItems.length > 0 ? (
                                 <div className="space-y-3">
-                                    {materialItems.map((item: any, idx: number) => (
+                                    {materialItems.map((item, idx) => (
                                         <div key={idx} className="flex justify-between items-center py-2 border-b border-gray-100 dark:border-gray-800 last:border-0">
                                             <div>
-                                                <p className="font-medium text-gray-900 dark:text-white">{item.name || item.description}</p>
+                                                <p className="font-medium text-gray-900 dark:text-white">{item.name}</p>
                                                 <p className="text-xs text-gray-500">Qty: {item.quantity}</p>
                                             </div>
                                             <div className="text-right">
-                                                <p className="font-medium text-gray-900 dark:text-white">{formatCurrency(item.cost || item.price || (50 * item.quantity))}</p>
+                                                {/* Mock price per item calculation for display */}
+                                                <p className="font-medium text-gray-900 dark:text-white">{formatCurrency(50 * item.quantity)}</p>
                                             </div>
                                         </div>
                                     ))}
@@ -226,12 +165,12 @@ export default function QuoteApproval() {
                                 </div>
                                 <div className="flex justify-between text-gray-600 dark:text-gray-400">
                                     <span>Platform Fee</span>
-                                    <span>{formatCurrency(totalPrice - totalMaterialsCost - totalLaborCost)}</span>
+                                    <span>{formatCurrency(estimate.price - totalMaterialsCost - totalLaborCost)}</span>
                                 </div>
                                 <div className="h-px bg-gray-200 dark:bg-gray-700 my-2" />
                                 <div className="flex justify-between text-xl font-bold text-gray-900 dark:text-white">
                                     <span>Total</span>
-                                    <span className="text-purple-600 dark:text-purple-400">{formatCurrency(totalPrice)}</span>
+                                    <span className="text-purple-600 dark:text-purple-400">{formatCurrency(estimate.price)}</span>
                                 </div>
                             </div>
 
@@ -240,20 +179,14 @@ export default function QuoteApproval() {
                                     className="w-full text-lg py-6"
                                     variant="primary"
                                     onClick={handleApprove}
-                                    disabled={processing}
                                 >
-                                    {processing ? (
-                                        <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                                    ) : (
-                                        <CheckCircle className="w-5 h-5 mr-2" />
-                                    )}
+                                    <CheckCircle className="w-5 h-5 mr-2" />
                                     Approve Quote
                                 </Button>
                                 <Button
                                     className="w-full"
                                     variant="outline"
-                                    onClick={handleReject}
-                                    disabled={processing}
+                                    onClick={() => alert('Please contact your Field Manager to discuss changes.')}
                                 >
                                     Request Changes
                                 </Button>

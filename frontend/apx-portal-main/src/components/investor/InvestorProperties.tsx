@@ -1,58 +1,31 @@
-import { useState, useEffect } from 'react';
 import Card from '@/components/ui/Card';
+import { jobs } from '@/data/mockData';
 import { formatCurrency } from '@/lib/utils';
 import { Building, MapPin } from 'lucide-react';
 import Badge from '@/components/ui/Badge';
 
 export default function InvestorProperties() {
-    const [properties, setProperties] = useState([]);
-    const [loading, setLoading] = useState(true);
-
-    useEffect(() => {
-        fetchProperties();
-    }, []);
-
-    const fetchProperties = async () => {
-        try {
-            const response = await fetch('/api/jobs/?is_project=true', {
-                headers: {
-                    'Authorization': `Bearer ${localStorage.getItem('token')}`
-                }
-            });
-            if (response.ok) {
-                const jobs = await response.json();
-                
-                // Group jobs by property
-                const propertyGroups = jobs.reduce((acc: any, job: any) => {
-                    if (!acc[job.property_address]) {
-                        acc[job.property_address] = {
-                            address: job.property_address,
-                            city: job.city,
-                            jobs: [],
-                            totalRevenue: 0,
-                            issues: 0
-                        };
-                    }
-                    acc[job.property_address].jobs.push(job);
-                    acc[job.property_address].totalRevenue += 5000; // Mock revenue
-                    if (job.status === 'Open' || job.status === 'InProgress') {
-                        // Mock logic for issues
-                    }
-                    return acc;
-                }, {});
-
-                setProperties(Object.values(propertyGroups));
+    const propertyGroups = jobs
+        .filter(j => j.isProject)
+        .reduce((acc, job) => {
+            if (!acc[job.propertyAddress]) {
+                acc[job.propertyAddress] = {
+                    address: job.propertyAddress,
+                    city: job.city,
+                    jobs: [],
+                    totalRevenue: 0,
+                    issues: 0
+                };
             }
-        } catch (error) {
-            console.error('Error fetching properties:', error);
-        } finally {
-            setLoading(false);
-        }
-    };
+            acc[job.propertyAddress].jobs.push(job);
+            acc[job.propertyAddress].totalRevenue += 5000; // Mock revenue
+            if (job.status === 'Open' || job.status === 'InProgress') {
+                // Mock logic for issues - e.g. if open too long
+            }
+            return acc;
+        }, {} as Record<string, any>);
 
-    if (loading) {
-        return <div className="text-center py-8">Loading properties...</div>;
-    }
+    const properties = Object.values(propertyGroups);
 
     return (
         <div className="grid grid-cols-1 gap-6">
@@ -105,7 +78,7 @@ export default function InvestorProperties() {
                                             <span className={`text-[10px] px-1.5 py-0.5 rounded ${job.status === 'Complete' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'
                                                 }`}>{job.status}</span>
                                         </div>
-                                        <p className="text-gray-500 truncate">{job.customer_name}</p>
+                                        <p className="text-gray-500 truncate">{job.customerName}</p>
                                     </div>
                                 ))}
                             </div>

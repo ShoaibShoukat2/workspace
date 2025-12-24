@@ -1,13 +1,9 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
-import { useAuth, getDashboardRoute } from './context/AuthContext';
+import { useAuth } from './context/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
-import AuthDebug from './components/AuthDebug';
 
 // Pages - will be created next
 import Login from './pages/Login';
-import Register from './pages/Register';
-import ForgotPassword from './pages/ForgotPassword';
-import ResetPassword from './pages/ResetPassword';
 
 // Contractor Portal
 import ContractorDashboard from './pages/contractor/ContractorDashboard';
@@ -15,11 +11,13 @@ import ComplianceHub from './pages/contractor/ComplianceHub';
 import JobBoard from './pages/contractor/JobBoard';
 import ActiveJobView from './pages/contractor/ActiveJobView';
 import Wallet from './pages/contractor/Wallet';
+import ContractorJobFlowDemo from './pages/contractor/ContractorJobFlowDemo';
+import ContractorPortal from './pages/contractor/ContractorPortal';
 
-// Field Manager Portal
-import FMDashboard from './pages/fm/FMDashboard';
-import FMJobVisit from './pages/fm/FMJobVisit';
-import ChangeOrderForm from './pages/fm/ChangeOrderForm';
+// Field Manager Portal (kept in codebase, routes hidden from UI)
+// import FMDashboard from './pages/fm/FMDashboard';
+// import FMJobVisit from './pages/fm/FMJobVisit';
+// import ChangeOrderForm from './pages/fm/ChangeOrderForm';
 
 // Admin Portal
 import AdminDashboard from './pages/admin/AdminDashboard';
@@ -44,8 +42,10 @@ import ReportIssue from './pages/customer/ReportIssue';
 import MaterialPurchaseStatus from './pages/customer/MaterialPurchaseStatus';
 import MaterialDeliveryConfirmation from './pages/customer/MaterialDeliveryConfirmation';
 import CustomerTracker from './pages/customer/CustomerTracker';
-import CustomerDashboard from './pages/customer/CustomerDashboard';
 import CustomerCredentials from './pages/customer/CustomerCredentials';
+import CustomerJobView from './pages/customer/CustomerJobView';
+import CustomerPortalLayout from './layouts/CustomerPortalLayout';
+import TestAPI from './pages/TestAPI';
 
 function App() {
     const { isAuthenticated, currentUser } = useAuth();
@@ -54,18 +54,32 @@ function App() {
         <div className="min-h-screen">
             <Routes>
                 {/* Public Routes */}
-                <Route path="/login" element={<Login />} />
-                <Route path="/register" element={<Register />} />
-                <Route path="/forgot-password" element={<ForgotPassword />} />
-                <Route path="/reset-password" element={<ResetPassword />} />
+                <Route path="/login" element={!isAuthenticated ? <Login /> : <Navigate to="/" replace />} />
+                <Route path="/test-api" element={<TestAPI />} />
                 <Route path="/track/:jobId" element={<CustomerTracker />} />
 
                 {/* Contractor Portal */}
+                <Route
+                    path="/contractor/portal"
+                    element={
+                        <ProtectedRoute allowedRoles={['contractor']}>
+                            <ContractorPortal />
+                        </ProtectedRoute>
+                    }
+                />
                 <Route
                     path="/contractor/dashboard"
                     element={
                         <ProtectedRoute allowedRoles={['contractor']}>
                             <ContractorDashboard />
+                        </ProtectedRoute>
+                    }
+                />
+                <Route
+                    path="/contractor/job-flow-demo"
+                    element={
+                        <ProtectedRoute allowedRoles={['contractor']}>
+                            <ContractorJobFlowDemo />
                         </ProtectedRoute>
                     }
                 />
@@ -102,31 +116,7 @@ function App() {
                     }
                 />
 
-                {/* Field Manager Portal */}
-                <Route
-                    path="/fm/dashboard"
-                    element={
-                        <ProtectedRoute allowedRoles={['fm']}>
-                            <FMDashboard />
-                        </ProtectedRoute>
-                    }
-                />
-                <Route
-                    path="/fm/visits/:jobId"
-                    element={
-                        <ProtectedRoute allowedRoles={['fm']}>
-                            <FMJobVisit />
-                        </ProtectedRoute>
-                    }
-                />
-                <Route
-                    path="/fm/visits/:jobId/change-order"
-                    element={
-                        <ProtectedRoute allowedRoles={['fm']}>
-                            <ChangeOrderForm />
-                        </ProtectedRoute>
-                    }
-                />
+                {/* Field Manager Portal - routes intentionally hidden */}
 
                 {/* Admin Portal */}
                 <Route
@@ -260,35 +250,49 @@ function App() {
                     }
                 />
 
-                {/* Customer Portal */}
+                {/* Customer Portal - Dashboard (uses LayoutShell with its own sidebar) */}
                 <Route
                     path="/customer/dashboard"
                     element={
                         <ProtectedRoute allowedRoles={['customer']}>
-                            <CustomerDashboard />
+                            <CustomerJobView />
                         </ProtectedRoute>
                     }
                 />
-                <Route path="/materials/:token" element={<MaterialPurchaseStatus />} />
-                <Route path="/materials/:token/delivery" element={<MaterialDeliveryConfirmation />} />
-                <Route path="/issue/:token" element={<ReportIssue />} />
+
+                {/* Customer Portal - Other pages (use CustomerPortalLayout) */}
+                <Route element={<ProtectedRoute allowedRoles={['customer']}>
+                    <CustomerPortalLayout />
+                </ProtectedRoute>}>
+                    <Route path="/materials/:token" element={<MaterialPurchaseStatus />} />
+                    <Route path="/materials/:token/delivery" element={<MaterialDeliveryConfirmation />} />
+                    <Route path="/issue/:token" element={<ReportIssue />} />
+                </Route>
 
                 {/* Public Magic Links */}
                 <Route path="/quote/:token" element={<QuoteApproval />} />
                 <Route path="/customer/credentials" element={<CustomerCredentials />} />
 
                 {/* Redirect root to login or dashboard based on auth */}
-                <Route 
-                    path="/" 
+                <Route
+                    path="/"
                     element={
-                        isAuthenticated && currentUser ? 
-                        <Navigate to={getDashboardRoute(currentUser.role)} replace /> : 
-                        <Navigate to="/login" replace />
-                    } 
+                        isAuthenticated && currentUser ? (
+                            <Navigate to={
+                                currentUser.role === 'admin' ? '/admin/dashboard' :
+                                    currentUser.role === 'fm' ? '/fm/dashboard' :
+                                        currentUser.role === 'contractor' ? '/contractor/portal' :
+                                            currentUser.role === 'investor' ? '/investor/dashboard' :
+                                                currentUser.role === 'customer' ? '/customer/dashboard' :
+                                                    '/login'
+                            } replace />
+                        ) : (
+                            <Navigate to="/login" replace />
+                        )
+                    }
                 />
                 <Route path="*" element={<Navigate to="/login" replace />} />
             </Routes>
-            <AuthDebug />
         </div >
     );
 }
